@@ -53,7 +53,10 @@ async function initializeDatabase() {
                 authorId VARCHAR(255) NOT NULL,
                 guildId VARCHAR(255) NOT NULL,
                 channelId VARCHAR(255) NOT NULL,
-                closed BOOLEAN DEFAULT FALSE
+                closed BOOLEAN DEFAULT FALSE,
+                assignedTo VARCHAR(255) NULL,
+                closedBy VARCHAR(255) NULL,
+                closeReason TEXT NULL
             );
         `);
         console.log('Database tables checked/created successfully.'.green);

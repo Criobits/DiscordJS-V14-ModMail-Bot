@@ -1,17 +1,18 @@
-const { EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require("discord.js");
-const { eventshandler, db, webhookClient } = require("..");
-const config = require("../config");
+const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
+const { eventshandler, db } = require("..");
+const { logAction } = require("../functions");
 
 module.exports = new eventshandler.event({
     event: 'interactionCreate',
     run: async (client, interaction) => {
         if (!interaction.isButton()) return;
+        
+        const customId = interaction.customId;
 
-        const allowedCategoryIds = config.modmail.categories.map(c => c.categoryId);
-        if (interaction.channel && !allowedCategoryIds.includes(interaction.channel.parentId)) return;
-
-        switch (interaction.customId) {
-            case 'reply_ticket': {
+        const isConfirmClose = customId.startsWith('confirm_close_');
+        
+        switch (true) {
+            case customId === 'reply_ticket': {
                 const modal = new ModalBuilder()
                     .setCustomId('reply_modal')
                     .setTitle('Rispondi al Ticket');
@@ -39,57 +40,73 @@ module.exports = new eventshandler.event({
                 break;
             }
 
-            case 'close_ticket': {
-                await interaction.reply({ content: 'Chiusura del ticket in corso...', ephemeral: true });
-                
+            case customId === 'assign_ticket': {
+                await interaction.deferUpdate();
                 const [rows] = await db.execute('SELECT * FROM mails WHERE channelId = ?', [interaction.channelId]);
                 const data = rows[0];
 
-                if (data) {
-                    await db.execute('DELETE FROM mails WHERE channelId = ?', [interaction.channelId]);
+                if (!data || data.assignedTo) {
+                    return interaction.followUp({ content: 'Questo ticket è già stato preso in carico o non è più valido.', ephemeral: true });
                 }
 
-                const transcriptMessages = [];
-                const messages = await interaction.channel.messages.fetch();
+                await db.execute('UPDATE mails SET assignedTo = ? WHERE channelId = ?', [interaction.user.id, interaction.channelId]);
 
-                messages.reverse().forEach(message => {
-                    const author = message.author.tag;
-                    const timestamp = new Date(message.createdTimestamp).toLocaleString('it-IT');
-                    if (message.content) {
-                        transcriptMessages.push(`[${timestamp}] ${author}: ${message.content}`);
-                    }
-                    if (message.embeds.length > 0) {
-                        const embed = message.embeds[0];
-                        transcriptMessages.push(`[${timestamp}] ${embed.author?.name || 'Bot'}: ${embed.description || '(Embed senza descrizione)'}`);
-                    }
+                const originalMessage = await interaction.channel.messages.fetch(interaction.message.id);
+                const newEmbed = EmbedBuilder.from(originalMessage.embeds[0])
+                    .addFields({ name: 'Assegnato a', value: interaction.user.toString() });
+
+                await originalMessage.edit({ embeds: [newEmbed] });
+
+                await logAction('Ticket Assegnato', 'Blue', [
+                    { name: 'Ticket', value: interaction.channel.toString() },
+                    { name: 'Assegnato a', value: interaction.user.toString(), inline: true },
+                    { name: 'Autore Ticket', value: `<@${data.authorId}>`, inline: true }
+                ]);
+
+                break;
+            }
+            
+            case customId === 'close_ticket': {
+                const confirmationRow = new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`confirm_close_${interaction.channelId}`)
+                            .setLabel('Conferma Chiusura')
+                            .setStyle(ButtonStyle.Danger),
+                        new ButtonBuilder()
+                            .setCustomId('cancel_close')
+                            .setLabel('Annulla')
+                            .setStyle(ButtonStyle.Secondary)
+                    );
+
+                await interaction.reply({
+                    content: 'Sei sicuro di voler chiudere questo ticket?',
+                    components: [confirmationRow],
+                    ephemeral: true
                 });
+                break;
+            }
 
-                await interaction.channel.delete('Ticket ModMail chiuso.');
+            case isConfirmClose: {
+                const channelId = customId.replace('confirm_close_', '');
+                const modal = new ModalBuilder()
+                    .setCustomId(`close_ticket_modal_${channelId}`)
+                    .setTitle('Motivo della Chiusura');
+                
+                const reasonInput = new TextInputBuilder()
+                    .setCustomId('close_reason_input')
+                    .setLabel("Perché stai chiudendo questo ticket?")
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(false)
+                    .setPlaceholder('Nessun motivo (opzionale)');
 
-                if (!data) return;
+                modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
+                await interaction.showModal(modal);
+                break;
+            }
 
-                try {
-                    const user = await client.users.fetch(data.authorId);
-                    await user.send({
-                        embeds: [new EmbedBuilder().setTitle('Il tuo mail è stato chiuso.').setDescription(`**${interaction.user.displayName}** ha chiuso il tuo mail. Grazie per averci contattato!`)]
-                    });
-
-                    if (transcriptMessages.length > 0) {
-                        await user.send({
-                            content: 'Ecco la cronologia dei messaggi del tuo ticket:',
-                            files: [new AttachmentBuilder(Buffer.from(transcriptMessages.join('\n'), 'utf-8'), { name: 'cronologia-ticket.txt' })]
-                        });
-                    }
-                } catch (error) {
-                    console.error(`Impossibile inviare DM di chiusura a ${data.authorId}`);
-                }
-
-
-                if (webhookClient) {
-                    await webhookClient.send({
-                        embeds: [new EmbedBuilder().setTitle('Mail chiuso').setDescription(`Il mail di <@${data.authorId}> è stato chiuso da ${interaction.user.toString()}.`).setColor('Red')]
-                    });
-                }
+            case customId === 'cancel_close': {
+                await interaction.update({ content: 'Chiusura annullata.', components: [] });
                 break;
             }
         }
