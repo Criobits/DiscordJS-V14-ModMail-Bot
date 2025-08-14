@@ -1,32 +1,29 @@
 module.exports = {
     client: {
-        token: '', // ← Il token del tuo bot (.env È RACCOMANDATO)
-        id: '' // ← L'ID del tuo bot
+        token: process.env.CLIENT_TOKEN || '', // Il token del tuo bot
+        id: '' // L'ID del tuo bot
+    },
+    database: {
+        host: process.env.DB_HOST || 'localhost',
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'modmail'
     },
     modmail: {
-        guildId: '', // ← L'ID del tuo server
+        guildId: '', // L'ID del tuo server
         categories: [
             {
-                name: 'Supporto Generale', // Nome visualizzato nel menu di selezione
-                id: 'supporto_generale', // ID unico, senza spazi o caratteri speciali
-                categoryId: '', // ← ID della categoria Discord per i ticket di supporto
-                staffRoles: ['ROLE_ID_1', 'ROLE_ID_2'], // ← Array di ID dei ruoli staff che possono vedere questi ticket
-                mentionStaffRolesOnNewMail: true, // true o false, per menzionare i ruoli
-                emoji: '🛠️', // Emoji opzionale per il menu
-                description: 'Apri un ticket per domande generiche o aiuto.' // Descrizione nel menu
-            },
-            {
-                name: 'Amministrazione',
-                id: 'amministrazione',
-                categoryId: '', // ← ID della categoria Discord per i ticket admin
-                staffRoles: ['ADMIN_ROLE_ID'], // ← Array di ID dei ruoli dei soli responsabili/admin
+                name: 'Supporto Generale',
+                id: 'supporto_generale',
+                categoryId: '',
+                staffRoles: ['ROLE_ID_1'],
                 mentionStaffRolesOnNewMail: true,
-                emoji: '👑',
-                description: 'Contatta direttamente i responsabili per questioni private.'
-            }
+                emoji: '🛠️',
+                description: 'Apri un ticket per domande generiche.'
+            },
         ]
     },
     logs: {
-        webhookURL: '' // ← L'URL del webhook per i log (OPZIONALE) (.env È RACCOMANDATO)
+        webhookURL: process.env.WEBHOOK_URL || ''
     }
 };

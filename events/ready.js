@@ -4,46 +4,30 @@ const config = require("../config");
 module.exports = new eventshandler.event({
     event: 'ready',
     once: true,
-    run: async (_, client) => {
+    run: async (client) => {
 
-        console.log('Logged in as: ' + client.user.displayName);
+        console.log(`Logged in as: ${client.user.displayName}`.green);
 
-        await commandshandler.deploy(client, {
-            REST: {
-                version: '10'
-            }
-        });
+        await commandshandler.deploy(client, { REST: { version: '10' } });
 
         const guild = client.guilds.cache.get(config.modmail.guildId);
-
         if (!guild) {
-            console.log('Invalid guild ID provided in config.js.');
-            process.exit(1);
-        };
+            console.log('ID gilda non valido in config.js.'.red);
+            return process.exit(1);
+        }
 
-        const category = guild.channels.cache.find((v) => v.id === config.modmail.categoryId || v.name === 'ModMail');
+        console.log('Checking database for invalid mails...'.yellow);
 
-        if (!category) {
-            console.log('Invalid category ID provided in config.js and unable to find a category named \'ModMail\'.');
-            process.exit(1);
-        };
-
-        console.log('Started checking the JSON files database...');
-
-        const mails = await db.select('mails', { guildId: guild.id });
-
-        let found = 0;
+        const [mails] = await db.execute('SELECT channelId FROM mails WHERE guildId = ?', [guild.id]);
+        let deletedCount = 0;
 
         for (const mail of mails) {
-            const channel = guild.channels.cache.get(mail.channelId);
-
-            if (!channel) {
-                found++;
-
-                db.delete('mails', { channelId: mail.channelId });
-            };
-        };
-
-        console.log('Total invalid mails found and deleted: ' + found);
+            if (!guild.channels.cache.has(mail.channelId)) {
+                await db.execute('DELETE FROM mails WHERE channelId = ?', [mail.channelId]);
+                deletedCount++;
+            }
+        }
+        
+        console.log(`Found and deleted ${deletedCount} invalid mails.`.blue);
     }
 });

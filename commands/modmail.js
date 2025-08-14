@@ -39,22 +39,16 @@ module.exports = new commandshandler.command({
                 const user = options.getUser('user', true);
                 const reason = options.getString('reason') || 'Nessun motivo fornito';
 
-                const count = await db.select('bans', { userId: user.id });
-
-                if (count.length > 0) {
-                    await interaction.reply({
+                const [rows] = await db.execute('SELECT * FROM bans WHERE userId = ?', [user.id]);
+                
+                if (rows.length > 0) {
+                    return interaction.reply({
                         content: 'Questo utente è già bannato.',
                         ephemeral: true
                     });
+                }
 
-                    return;
-                };
-
-                await db.insert('bans', {
-                    userId: user.id,
-                    guildId: interaction.guild.id,
-                    reason: reason
-                });
+                await db.execute('INSERT INTO bans (userId, guildId, reason) VALUES (?, ?, ?)', [user.id, interaction.guild.id, reason]);
 
                 await interaction.reply({
                     content: "L'utente è stato bannato con successo.",
@@ -62,23 +56,21 @@ module.exports = new commandshandler.command({
                 });
 
                 break;
-            };
+            }
 
             case 'unban': {
                 const user = options.getUser('user', true);
 
-                const count = await db.select('bans', { userId: user.id });
+                const [rows] = await db.execute('SELECT * FROM bans WHERE userId = ?', [user.id]);
 
-                if (count.length <= 0) {
-                    await interaction.reply({
+                if (rows.length === 0) {
+                    return interaction.reply({
                         content: 'Questo utente non è bannato.',
                         ephemeral: true
                     });
+                }
 
-                    return;
-                };
-
-                await db.delete('bans', { userId: user.id });
+                await db.execute('DELETE FROM bans WHERE userId = ?', [user.id]);
 
                 await interaction.reply({
                     content: "Il ban dell'utente è stato rimosso con successo.",
@@ -86,8 +78,7 @@ module.exports = new commandshandler.command({
                 });
 
                 break;
-            };
-        };
-
+            }
+        }
     }
 });

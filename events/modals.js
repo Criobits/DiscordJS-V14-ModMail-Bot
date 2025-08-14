@@ -1,16 +1,17 @@
 const { EmbedBuilder } = require("discord.js");
 const { eventshandler, db } = require("..");
-const config = require("../config");
 const { permissionsCalculator } = require("../functions");
 
 module.exports = new eventshandler.event({
     event: 'interactionCreate',
     run: async (client, interaction) => {
         if (!interaction.isModalSubmit() || interaction.customId !== 'reply_modal') return;
-
+        
         await interaction.deferReply({ ephemeral: true });
 
-        const data = (await db.select('mails', { channelId: interaction.channelId }))[0];
+        const [rows] = await db.execute('SELECT * FROM mails WHERE channelId = ?', [interaction.channelId]);
+        const data = rows[0];
+        
         if (!data) return interaction.editReply({ content: 'Impossibile trovare i dati di questo ticket.' });
         
         const user = await client.users.fetch(data.authorId).catch(() => null);
@@ -27,34 +28,24 @@ module.exports = new eventshandler.event({
             .setColor('Blurple');
 
         if (isAnonymous) {
-            userEmbed.setAuthor({
-                name: `Staff [${perms}]`,
-                iconURL: interaction.guild.iconURL()
-            });
+            userEmbed.setAuthor({ name: `Staff [${perms}]`, iconURL: interaction.guild.iconURL() });
         } else {
-            userEmbed.setAuthor({
-                name: `${interaction.user.displayName} [${perms}]`,
-                iconURL: interaction.user.displayAvatarURL()
-            });
-        }
-
-        const dmSent = await user.send({ embeds: [userEmbed] }).catch(() => null);
-
-        if (!dmSent) {
-            return interaction.editReply({ content: "Messaggio non inviato. L'utente ha i DM chiusi o mi ha bloccato." });
+            userEmbed.setAuthor({ name: `${interaction.user.displayName} [${perms}]`, iconURL: interaction.user.displayAvatarURL() });
         }
         
-        const channelEmbed = new EmbedBuilder()
-            .setDescription(message)
-            .setColor(isAnonymous ? 'Greyple' : 'Green');
-
-        channelEmbed.setAuthor({
-            name: `Risposta inviata da ${interaction.user.displayName}${isAnonymous ? ' (Anonimamente)' : ''}`,
-            iconURL: interaction.user.displayAvatarURL()
-        });
-        
-        await interaction.channel.send({ embeds: [channelEmbed] });
-
-        await interaction.editReply({ content: 'Risposta inviata con successo!' });
+        try {
+            await user.send({ embeds: [userEmbed] });
+            
+            const channelEmbed = new EmbedBuilder()
+                .setDescription(message)
+                .setColor(isAnonymous ? 'Greyple' : 'Green')
+                .setAuthor({ name: `Risposta da ${interaction.user.displayName}${isAnonymous ? ' (Anonima)' : ''}`, iconURL: interaction.user.displayAvatarURL() });
+            
+            await interaction.channel.send({ embeds: [channelEmbed] });
+            await interaction.editReply({ content: 'Risposta inviata con successo!' });
+        } catch (error) {
+            console.error("Impossibile inviare DM di risposta:", error);
+            interaction.editReply({ content: "Messaggio non inviato. L'utente potrebbe avere i DM chiusi o avermi bloccato." });
+        }
     }
 });

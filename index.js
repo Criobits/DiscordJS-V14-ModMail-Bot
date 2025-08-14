@@ -1,27 +1,20 @@
-const { SQLiteDatabase } = require('@tfadev/easy-sqlite');
 const { CommandsHandler, EventsHandler } = require('horizon-handler');
-const {
-    Client,
-    GatewayIntentBits,
-    Partials,
-    Collection,
-    WebhookClient
-} = require('discord.js');
+const { Client, GatewayIntentBits, Partials, WebhookClient } = require('discord.js');
+const mysql = require('mysql2/promise');
 require('colors');
 require('dotenv').config();
 const config = require("./config.js");
-const projectVersion = require('./package.json').version || "v0.0.0";
+const projectVersion = require('./package.json').version;
 
 const client = new Client({
     intents: [
-        Object.keys(GatewayIntentBits)
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.MessageContent
     ],
-    partials: [
-        Partials.Message,
-        Partials.Channel,
-        Partials.GuildMember,
-        Partials.User
-    ],
+    partials: [Partials.Channel, Partials.Message],
     presence: {
         activities: [{
             name: "Scrivimi in DM per creare un mail!",
@@ -32,57 +25,55 @@ const client = new Client({
     shards: "auto"
 });
 
-const webhookClient = (config.logs.webhookURL || process.env.WEBHOOK_URL )
-    ? new WebhookClient({ url: config.logs.webhookURL || process.env.WEBHOOK_URL })
-    : null;
+const webhookClient = (config.logs.webhookURL) ? new WebhookClient({ url: config.logs.webhookURL }) : null;
 
-const db = new SQLiteDatabase('./SQL/main.db');
+const db = mysql.createPool({
+    host: config.database.host,
+    user: config.database.user,
+    password: config.database.password,
+    database: config.database.database,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
 
-(async () => {
-    await db.create(
-        {
-            name: 'bans',
-            overwrite: true,
-            keys: {
-                id: ['INTEGER', { primary: true, autoincrement: true }],
-                userId: ['TEXT'],
-                guildId: ['TEXT'],
-                reason: ['TEXT', { nullable: true }]
-            }
-        },
-        {
-            name: 'mails',
-            overwrite: true,
-            keys: {
-                id: ['INTEGER', { primary: true, autoincrement: true }],
-                authorId: ['TEXT'],
-                guildId: ['TEXT'],
-                channelId: ['TEXT'],
-                closed: ['BOOLEAN', { nullable: true }]
-            }
-        }
-    );
-})();
+async function initializeDatabase() {
+    try {
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS bans (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                userId VARCHAR(255) NOT NULL,
+                guildId VARCHAR(255) NOT NULL,
+                reason TEXT
+            );
+        `);
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS mails (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                authorId VARCHAR(255) NOT NULL,
+                guildId VARCHAR(255) NOT NULL,
+                channelId VARCHAR(255) NOT NULL,
+                closed BOOLEAN DEFAULT FALSE
+            );
+        `);
+        console.log('Database tables checked/created successfully.'.green);
+    } catch (error) {
+        console.error('Error initializing database:'.red, error);
+    }
+}
 
-console.log(`
-███╗░░░███╗░█████╗░██████╗░███╗░░░███╗░█████╗░██╗██╗░░░░░
-████╗░████║██╔══██╗██╔══██╗████╗░████║██╔══██╗██║██║░░░░░
-██╔████╔██║██║░░██║██║░░██║██╔████╔██║███████║██║██║░░░░░
-██║╚██╔╝██║██║░░██║██║░░██║██║╚██╔╝██║██╔══██║██║██║░░░░░
-██║░╚═╝░██║╚█████╔╝██████╔╝██║░╚═╝░██║██║░░██║██║███████╗
-╚═╝░░░░░╚═╝░╚════╝░╚═════╝░╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═╝╚══════╝
-`.underline.blue + `version ${projectVersion}, by T.F.A#7524.
-`.underline.cyan);
 
-client.login(config.client.token || process.env.CLIENT_TOKEN).catch((e) => {
-    console.error('Unable to connect to the bot, this might be an invalid token or missing required intents!\n'.red, e);
+console.log(`ModMail Bot - v${projectVersion}`.cyan.underline);
+
+client.login(config.client.token).catch((e) => {
+    console.error('Unable to connect. Invalid token or missing intents?'.red, e);
 });
 
 const commandshandler = new CommandsHandler('./commands/', false);
 const eventshandler = new EventsHandler('./events/', false);
 
-commandshandler.on('fileLoad', (command) => console.log('Loaded new command: ' + command.name));
-eventshandler.on('fileLoad', (event) => console.log('Loaded new event: ' + event));
+commandshandler.on('fileLoad', (command) => console.log('Loaded command: ' + command.name));
+eventshandler.on('fileLoad', (event) => console.log('Loaded event: ' + event));
 
 module.exports = {
     client,
@@ -93,19 +84,15 @@ module.exports = {
 };
 
 (async () => {
+    await initializeDatabase();
     await commandshandler.load();
-
     await eventshandler.load(client);
 })();
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error("[ANTI-CRASH: unhandledRejection] An error has occured and been successfully handled:".yellow);
-
-    console.error(promise, reason);
+    console.error("[ANTI-CRASH] unhandledRejection:".yellow, reason, promise);
 });
 
 process.on("uncaughtException", (err, origin) => {
-    console.error("[ANTI-CRASH: uncaughtException] An error has occured and been successfully handled:".yellow);
-
-    console.error(err, origin);
+    console.error("[ANTI-CRASH] uncaughtException:".yellow, err, origin);
 });

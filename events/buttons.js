@@ -1,12 +1,10 @@
 const { EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require("discord.js");
 const { eventshandler, db, webhookClient } = require("..");
 const config = require("../config");
-const { time } = require("../functions");
 
 module.exports = new eventshandler.event({
     event: 'interactionCreate',
     run: async (client, interaction) => {
-
         if (!interaction.isButton()) return;
 
         const allowedCategoryIds = config.modmail.categories.map(c => c.categoryId);
@@ -43,47 +41,57 @@ module.exports = new eventshandler.event({
 
             case 'close_ticket': {
                 await interaction.reply({ content: 'Chiusura del ticket in corso...', ephemeral: true });
+                
+                const [rows] = await db.execute('SELECT * FROM mails WHERE channelId = ?', [interaction.channelId]);
+                const data = rows[0];
+
+                if (data) {
+                    await db.execute('DELETE FROM mails WHERE channelId = ?', [interaction.channelId]);
+                }
 
                 const transcriptMessages = [];
                 const messages = await interaction.channel.messages.fetch();
 
-                for (const message of messages.values()) {
-                    if (message.embeds.length > 0 && message.author.id === client.user.id) {
-                        const embed = message.embeds[0];
-                        transcriptMessages.push(`[${new Date(message.createdTimestamp).toLocaleString()}] ${embed.author?.name || 'Bot'}: ${embed.description || ''}`);
-                    } else if (message.content) {
-                        transcriptMessages.push(`[${new Date(message.createdTimestamp).toLocaleString()}] ${message.author.displayName}: ${message.content}`);
+                messages.reverse().forEach(message => {
+                    const author = message.author.tag;
+                    const timestamp = new Date(message.createdTimestamp).toLocaleString('it-IT');
+                    if (message.content) {
+                        transcriptMessages.push(`[${timestamp}] ${author}: ${message.content}`);
                     }
-                }
-                transcriptMessages.reverse();
-                
-                const data = (await db.select('mails', { channelId: interaction.channelId }))[0];
-                if (data) {
-                    await db.delete('mails', { channelId: interaction.channelId });
-                }
+                    if (message.embeds.length > 0) {
+                        const embed = message.embeds[0];
+                        transcriptMessages.push(`[${timestamp}] ${embed.author?.name || 'Bot'}: ${embed.description || '(Embed senza descrizione)'}`);
+                    }
+                });
 
                 await interaction.channel.delete('Ticket ModMail chiuso.');
 
                 if (!data) return;
-                const user = await client.users.fetch(data.authorId).catch(() => null);
-                if (!user) return;
 
-                await user.send({
-                    embeds: [ new EmbedBuilder().setTitle('Il tuo mail è stato chiuso.').setDescription(`**${interaction.user.displayName}** ha chiuso il tuo mail. Grazie per averci contattato!`) ]
-                }).catch(null);
+                try {
+                    const user = await client.users.fetch(data.authorId);
+                    await user.send({
+                        embeds: [new EmbedBuilder().setTitle('Il tuo mail è stato chiuso.').setDescription(`**${interaction.user.displayName}** ha chiuso il tuo mail. Grazie per averci contattato!`)]
+                    });
 
-                await user.send({
-                    content: 'Ecco la cronologia dei messaggi del tuo ticket:',
-                    files: [ new AttachmentBuilder(Buffer.from(transcriptMessages.join('\n'), 'utf-8'), { name: 'cronologia-ticket.txt' })]
-                }).catch(null);
+                    if (transcriptMessages.length > 0) {
+                        await user.send({
+                            content: 'Ecco la cronologia dei messaggi del tuo ticket:',
+                            files: [new AttachmentBuilder(Buffer.from(transcriptMessages.join('\n'), 'utf-8'), { name: 'cronologia-ticket.txt' })]
+                        });
+                    }
+                } catch (error) {
+                    console.error(`Impossibile inviare DM di chiusura a ${data.authorId}`);
+                }
+
 
                 if (webhookClient) {
                     await webhookClient.send({
-                        embeds: [ new EmbedBuilder().setTitle('Mail chiuso').setDescription(`Il mail di <@${data.authorId}> è stato chiuso da ${interaction.user.toString()}.`).setColor('Red') ]
+                        embeds: [new EmbedBuilder().setTitle('Mail chiuso').setDescription(`Il mail di <@${data.authorId}> è stato chiuso da ${interaction.user.toString()}.`).setColor('Red')]
                     });
                 }
                 break;
-            };
-        };
+            }
+        }
     }
 });
