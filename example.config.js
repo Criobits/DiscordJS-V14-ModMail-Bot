@@ -1,7 +1,7 @@
 module.exports = {
     client: {
         token: process.env.CLIENT_TOKEN || '', // Il token del tuo bot
-        id: '' // L'ID del tuo bot
+        id: process.env.CLIENT_ID || '' // L'ID del tuo bot
     },
     database: {
         host: process.env.DB_HOST || 'localhost',
