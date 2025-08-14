@@ -5,27 +5,27 @@ module.exports = new commandshandler.command({
     type: 1,
     structure: new SlashCommandBuilder()
         .setName('modmail')
-        .setDescription('ModMail manager.')
+        .setDescription('Gestore ModMail.')
         .addSubcommand((sub) =>
             sub.setName('ban')
-                .setDescription('Ban a user from using ModMail.')
+                .setDescription("Banna un utente dall'utilizzo del ModMail.")
                 .addUserOption((opt) =>
                     opt.setName('user')
-                        .setDescription('The user to ban.')
+                        .setDescription("L'utente da bannare.")
                         .setRequired(true)
                 )
                 .addStringOption((opt) =>
                     opt.setName('reason')
-                        .setDescription('The reason of the ban.')
+                        .setDescription('Il motivo del ban.')
                         .setRequired(false)
                 )
         )
         .addSubcommand((sub) =>
             sub.setName('unban')
-                .setDescription('Unban a user from using ModMail.')
+                .setDescription("Sbanna un utente dall'utilizzo del ModMail.")
                 .addUserOption((opt) =>
                     opt.setName('user')
-                        .setDescription('The user to unban.')
+                        .setDescription("L'utente da sbannare.")
                         .setRequired(true)
                 )
         )
@@ -37,13 +37,13 @@ module.exports = new commandshandler.command({
         switch (options.getSubcommand()) {
             case 'ban': {
                 const user = options.getUser('user', true);
-                const reason = options.getString('reason') || 'No reason was provided';
+                const reason = options.getString('reason') || 'Nessun motivo fornito';
 
                 const count = await db.select('bans', { userId: user.id });
 
                 if (count.length > 0) {
                     await interaction.reply({
-                        content: 'That user is banned already.',
+                        content: 'Questo utente è già bannato.',
                         ephemeral: true
                     });
 
@@ -57,7 +57,7 @@ module.exports = new commandshandler.command({
                 });
 
                 await interaction.reply({
-                    content: 'That user has been banned successfully.',
+                    content: "L'utente è stato bannato con successo.",
                     ephemeral: true
                 });
 
@@ -71,7 +71,7 @@ module.exports = new commandshandler.command({
 
                 if (count.length <= 0) {
                     await interaction.reply({
-                        content: 'That user is not banned already.',
+                        content: 'Questo utente non è bannato.',
                         ephemeral: true
                     });
 
@@ -81,7 +81,7 @@ module.exports = new commandshandler.command({
                 await db.delete('bans', { userId: user.id });
 
                 await interaction.reply({
-                    content: 'That user has been unbanned successfully.',
+                    content: "Il ban dell'utente è stato rimosso con successo.",
                     ephemeral: true
                 });
 

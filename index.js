@@ -24,9 +24,9 @@ const client = new Client({
     ],
     presence: {
         activities: [{
-            name: "DM me to create a mail!",
+            name: "Scrivimi in DM per creare un mail!",
             type: 1,
-            url: "https://twitch.tv/discord"
+            url: "https://criobits.com"
         }]
     },
     shards: "auto"
@@ -109,12 +109,3 @@ process.on("uncaughtException", (err, origin) => {
 
     console.error(err, origin);
 });
-
-/*
-* DiscordJS-V14-ModMail-Bot v7
-* Yet Another Discord ModMail Bot made with discord.js v14, built on VSCode and coded by T.F.A#7524.
-* Developer: T.F.A#7524
-* Support server: https://discord.gg/E6VFACWu5V
-* Please DO NOT remove these lines, these are the credits to the developer.
-* Sharing this project without giving credits to me (T.F.A) ends in a Copyright warning. (©)
-*/

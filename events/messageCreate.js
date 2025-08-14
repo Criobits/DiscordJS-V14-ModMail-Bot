@@ -1,303 +1,151 @@
-const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, roleMention } = require("discord.js");
+const { EmbedBuilder, StringSelectMenuBuilder, ActionRowBuilder, roleMention, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const { eventshandler, db, webhookClient } = require("..");
 const config = require("../config");
-const { time, permissionsCalculator } = require("../functions");
+const { time } = require("../functions");
 
 const set = new Set();
 
 module.exports = new eventshandler.event({
     event: 'messageCreate',
     run: async (client, message) => {
-
         if (message.author.bot) return;
 
         const guild = client.guilds.cache.get(config.modmail.guildId);
-        const category = guild.channels.cache.find((v) => v.id === config.modmail.categoryId || v.name === 'ModMail');
-
-        await guild.members.fetch();
-
+        
         if (message.guild) {
-            if (message.channel.parentId !== category.id) return;
-
-            const data = (await db.select('mails', { channelId: message.channelId }))[0];
-
-            const user = guild.members.cache.get(data?.authorId);
-
-            if (!user) {
-                await message.reply({
-                    content: 'The author of the mail was not found, you can delete this ticket.'
-                });
-
-                return;
-            };
-
-            const perms = permissionsCalculator(message.member);
-
-            const embed = new EmbedBuilder()
-                .setAuthor({
-                    name: message.author.displayName + ` [${perms}]`,
-                    iconURL: message.author.displayAvatarURL()
-                })
-                .setDescription(message.content?.length > 0 ? message.content : null)
-                .setColor('Blurple');
-
-            if (message.attachments?.size) {
-                const imageAttachment = message.attachments.find(attachment => attachment.contentType.startsWith('image/'));
-
-                if (imageAttachment) {
-                    embed.setImage(imageAttachment.proxyURL);
-                } else {
-                    message.attachments.forEach(attachment => {
-                        user.send({ files: [attachment] });
-                    });
-                };
-            };
-
-            await user.send({
-                embeds: [
-                    embed
-                ]
-            }).catch(async () => {
-                await message.reply({
-                    content: 'The user has their DMs closed, or they blocked me!'
-                });
-            });
-
-            await message.react('📨').catch(null);
+            const allowedCategoryIds = config.modmail.categories.map(c => c.categoryId);
+            if (!allowedCategoryIds.includes(message.channel.parentId)) return;
+            // I messaggi dello staff nel canale modmail vengono ignorati, devono usare i bottoni
+            return;
         } else {
             const bannedCheckr = (await db.select('bans', { userId: message.author.id }))[0];
-
             if (bannedCheckr) {
-                await message.reply({
-                    content: 'You are currently banned for using the ModMail system.\n\n**Reason**: ' + bannedCheckr?.reason || 'No reason was provided.'
+                return message.reply({
+                    content: "Sei attualmente bannato dall'utilizzo del sistema ModMail.\n\n**Motivo**: " + (bannedCheckr?.reason || 'Nessun motivo fornito.')
                 });
-
-                return;
-            };
+            }
 
             const data = (await db.select('mails', { authorId: message.author.id }))[0];
+            if (data) {
+                 const channel = guild.channels.cache.get(data.channelId);
+                 if (channel) {
+                    const embed = new EmbedBuilder()
+                        .setAuthor({ name: message.author.displayName, iconURL: message.author.displayAvatarURL() })
+                        .setDescription(message.content?.length > 0 ? message.content : null)
+                        .setColor('Blurple');
 
-            const channel = guild.channels.cache.find((channel) => channel.id === data?.channelId);
-
-            if (!channel) {
-                if (set.has(message.author.id)) {
-                    await message.reply({
-                        content: 'There is a currently request waiting for your response, please wait until it expires.'
-                    });
-
-                    return;
-                };
-
-                const buttons = [
-                    new ButtonBuilder()
-                        .setCustomId('create')
-                        .setLabel('Create')
-                        .setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder()
-                        .setCustomId('cancel')
-                        .setLabel('Cancel')
-                        .setStyle(ButtonStyle.Secondary)
-                ];
-
-                set.add(message.author.id);
-
-                const sent = await message.reply({
-                    content: `You\'re about to create a new mail with the details from the replied message, are you sure about that?\nYou have 15 seconds to select one of the buttons below. (${time(Date.now() + 15000, 'R')})`,
-                    components: [
-                        new ActionRowBuilder()
-                            .addComponents(
-                                buttons
-                            )
-                    ]
-                });
-
-                const collector = message.channel.createMessageComponentCollector({
-                    time: 15000,
-                    filter: (i) => i.user.id === message.author.id
-                });
-
-                collector.on('collect', async (i) => {
-                    collector.stop();
-
-                    set.delete(message.author.id);
-
-                    switch (i.customId) {
-                        case 'create': {
-                            const permissions = [
-                                {
-                                    id: guild.roles.everyone.id,
-                                    deny: ['ViewChannel']
-                                }
-                            ];
-
-                            for (const role of config.modmail.staffRoles) {
-                                const fetched = guild.roles.cache.get(role);
-
-                                if (fetched) permissions.push({
-                                    id: role,
-                                    allow: ['ViewChannel', 'SendMessages', 'AttachFiles']
-                                });
-                            };
-
-                            const newchannel = await guild.channels.create({
-                                name: message.author.displayName,
-                                nsfw: false,
-                                type: 0,
-                                parent: category.id,
-                                permissionOverwrites: permissions
-                            });
-
-                            await db.insert('mails', {
-                                authorId: message.author.id,
-                                channelId: newchannel.id,
-                                guildId: guild.id,
-                            });
-
-                            await sent.edit({
-                                content: null,
-                                embeds: [
-                                    new EmbedBuilder()
-                                        .setTitle(`${guild.name} - ModMail`)
-                                        .setDescription('Thank you for creating a new mail, a staff member should respond to your ticket any time soon!')
-                                        .setFooter({
-                                            text: '© T.F.A 7524, https://www.github.com/TFAGaming/DiscordJS-V14-ModMail-Bot'
-                                        })
-                                        .setColor('Blurple')
-                                ],
-                                components: []
-                            });
-
-                            await i.reply({
-                                content: 'Your mail has been successfully created!',
-                                ephemeral: true
-                            });
-
-                            const embed = new EmbedBuilder()
-                                .setTitle(`New mail`)
-                                .addFields(
-                                    {
-                                        name: `Author`,
-                                        value: `${message.author.displayName} (\`${message.author.id}\`)`
-                                    },
-                                    {
-                                        name: `Message`,
-                                        value: `${message.content?.length > 0 ? message.content : '(None)'}`
-                                    }
-                                )
-                                .setColor('Blurple');
-
-                            if (message.attachments?.size) {
-                                const imageAttachment = message.attachments.find(attachment => attachment.contentType.startsWith('image/'));
-                                if (imageAttachment) {
-                                    embed.setImage(imageAttachment.proxyURL);
-                                } else {
-                                    message.attachments.forEach(attachment => {
-                                        newchannel.send({ files: [attachment] });
-                                    });
-                                };
-                            };
-
-                            await newchannel.send({
-                                content: config.modmail.mentionStaffRolesOnNewMail ? config.modmail.staffRoles.map((v) => roleMention(v)).join(', ') : null,
-                                embeds: [
-                                    embed
-                                ],
-                                components: [
-                                    new ActionRowBuilder()
-                                        .addComponents(
-                                            new ButtonBuilder()
-                                                .setCustomId('close')
-                                                .setLabel('Close mail')
-                                                .setStyle(ButtonStyle.Primary)
-                                        )
-                                ]
-                            }).then(async (sent) => await sent.pin());
-                            
-                            if (webhookClient === null) return;
-
-                            await webhookClient.send({
-                                embeds: [
-                                    new EmbedBuilder()
-                                        .setTitle('New mail created')
-                                        .setDescription(`<@${message.author.id || '000000000000000000'}>'s mail has been created.\n\n**Executed by**: ${message.author.displayName} (${message.author.toString()})\n**Date**: ${time(Date.now(), 'f')} (${time(Date.now(), 'R')})`)
-                                        .setFooter({ text: guild.name + '\'s  logging system' })
-                                        .setColor('Green')
-                                ]
-                            });
-
-                            break;
-                        };
-
-                        case 'cancel': {
-                            await i.reply({
-                                content: 'The request has been cancelled.',
-                                ephemeral: true
-                            });
-
-                            await sent.edit({
-                                components: [
-                                    new ActionRowBuilder()
-                                        .addComponents(
-                                            buttons.map((v) =>
-                                                v.setStyle(ButtonStyle.Secondary)
-                                                    .setDisabled(true)
-                                            )
-                                        )
-                                ]
-                            });
-
-                            break;
-                        };
-                    };
-                });
-
-                collector.on('end', async () => {
-                    if (collector.endReason === 'time') {
-                        set.delete(message.author.id);
-
-                        await sent.edit({
-                            components: [
-                                new ActionRowBuilder()
-                                    .addComponents(
-                                        buttons.map((v) =>
-                                            v.setStyle(ButtonStyle.Secondary)
-                                                .setDisabled(true)
-                                        )
-                                    )
-                            ]
-                        });
-                    };
-                });
-
-            } else {
-                const embed = new EmbedBuilder()
-                    .setAuthor({
-                        name: message.author.displayName,
-                        iconURL: message.author.displayAvatarURL()
-                    })
-                    .setDescription(message.content?.length > 0 ? message.content : null)
-                    .setColor('Blurple');
-
-                if (message.attachments?.size) {
-                    const imageAttachment = message.attachments.find(attachment => attachment.contentType.startsWith('image/'));
-                    if (imageAttachment) {
-                        embed.setImage(imageAttachment.proxyURL);
-                    } else {
-                        message.attachments.forEach(attachment => {
-                            channel.send({ files: [attachment] });
-                        });
+                    if (message.attachments?.size) {
+                        const imageAttachment = message.attachments.find(attachment => attachment.contentType.startsWith('image/'));
+                        if (imageAttachment) {
+                            embed.setImage(imageAttachment.proxyURL);
+                        } else {
+                            message.attachments.forEach(attachment => channel.send({ files: [attachment] }));
+                        }
                     }
+                    await channel.send({ embeds: [embed] });
+                    return message.react('📨');
+                 }
+            }
+
+            if (set.has(message.author.id)) {
+                return message.reply({ content: 'Hai già una richiesta di apertura ticket in corso. Completa quella prima di inviare nuovi messaggi.' });
+            }
+
+            const selectMenu = new StringSelectMenuBuilder()
+                .setCustomId('create_ticket_category')
+                .setPlaceholder('Seleziona una categoria per il tuo ticket')
+                .addOptions(
+                    config.modmail.categories.map(category =>
+                        new StringSelectMenuOptionBuilder()
+                            .setLabel(category.name)
+                            .setValue(category.id)
+                            .setDescription(category.description)
+                            .setEmoji(category.emoji || '✉️')
+                    )
+                );
+
+            const row = new ActionRowBuilder().addComponents(selectMenu);
+            set.add(message.author.id);
+
+            const sent = await message.reply({
+                content: `Ciao! Per aprire un ticket, scegli la categoria appropriata. Il tuo messaggio qui sopra sarà il primo del ticket.`,
+                components: [row]
+            });
+
+            const collector = sent.createMessageComponentCollector({
+                filter: i => i.customId === 'create_ticket_category' && i.user.id === message.author.id,
+                time: 60000 
+            });
+
+            collector.on('collect', async i => {
+                const selectedCategoryId = i.values[0];
+                const selectedCategory = config.modmail.categories.find(c => c.id === selectedCategoryId);
+                if (!selectedCategory) return i.update({ content: 'Categoria non valida.', components: [] });
+
+                collector.stop();
+                set.delete(message.author.id);
+
+                const permissions = [
+                    { id: guild.roles.everyone.id, deny: ['ViewChannel'] }
+                ];
+                selectedCategory.staffRoles.forEach(roleId => {
+                    permissions.push({ id: roleId, allow: ['ViewChannel', 'SendMessages', 'AttachFiles', 'ReadMessageHistory'] });
+                });
+
+                const newChannel = await guild.channels.create({
+                    name: `${selectedCategory.id}-${message.author.username}`,
+                    type: 0,
+                    parent: selectedCategory.categoryId,
+                    permissionOverwrites: permissions
+                });
+
+                await db.insert('mails', { authorId: message.author.id, channelId: newChannel.id, guildId: guild.id });
+                await i.update({ content: `Il tuo ticket in **${selectedCategory.name}** è stato creato!`, components: [] });
+
+                const embed = new EmbedBuilder()
+                    .setTitle(`Nuovo mail - ${selectedCategory.name}`)
+                    .addFields(
+                        { name: `Autore`, value: `${message.author.displayName} (\`${message.author.id}\`)` },
+                        { name: `Messaggio`, value: `${message.content?.length > 0 ? message.content : '(Nessuno)'}` }
+                    )
+                    .setColor('Blurple');
+                
+                if (message.attachments?.size > 0) {
+                    const imageAttachment = message.attachments.find(a => a.contentType?.startsWith('image/'));
+                    if (imageAttachment) embed.setImage(imageAttachment.proxyURL);
                 }
 
-                await channel.send({
-                    embeds: [
-                        embed
-                    ]
-                }).catch(null);
+                const initialMessageContent = selectedCategory.mentionStaffRolesOnNewMail ? selectedCategory.staffRoles.map(r => roleMention(r)).join(' ') : null;
 
-                await message.react('📨');
-            };
-        };
+                const ticketActionRow = new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('reply_ticket')
+                            .setLabel('Rispondi')
+                            .setStyle(ButtonStyle.Success)
+                            .setEmoji('✉️'),
+                        new ButtonBuilder()
+                            .setCustomId('close_ticket')
+                            .setLabel('Chiudi Ticket')
+                            .setStyle(ButtonStyle.Danger)
+                            .setEmoji('🔒')
+                    );
 
+                await newChannel.send({
+                    content: initialMessageContent,
+                    embeds: [embed],
+                    components: [ticketActionRow]
+                }).then(sentPin => sentPin.pin());
+
+                if (webhookClient) await webhookClient.send({ embeds: [ new EmbedBuilder().setTitle('Nuovo mail creato').setDescription(`Il mail di <@${message.author.id}> in **${selectedCategory.name}** è stato creato.`).setColor('Green') ] });
+            });
+
+            collector.on('end', (collected, reason) => {
+                if (reason === 'time') {
+                    set.delete(message.author.id);
+                    sent.edit({ content: 'Richiesta di apertura ticket scaduta.', components: [] });
+                }
+            });
+        }
     }
 });

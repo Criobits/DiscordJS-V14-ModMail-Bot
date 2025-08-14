@@ -5,7 +5,7 @@ module.exports = new commandshandler.command({
     type: 1,
     structure: new SlashCommandBuilder()
         .setName('ping')
-        .setDescription('Replies with Pong!'),
+        .setDescription('Risponde con Pong!'),
     run: async (client, interaction) => {
 
         await interaction.reply({

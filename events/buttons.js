@@ -1,4 +1,4 @@
-const { EmbedBuilder, AttachmentBuilder } = require("discord.js");
+const { EmbedBuilder, AttachmentBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require("discord.js");
 const { eventshandler, db, webhookClient } = require("..");
 const config = require("../config");
 const { time } = require("../functions");
@@ -9,79 +9,81 @@ module.exports = new eventshandler.event({
 
         if (!interaction.isButton()) return;
 
+        const allowedCategoryIds = config.modmail.categories.map(c => c.categoryId);
+        if (interaction.channel && !allowedCategoryIds.includes(interaction.channel.parentId)) return;
+
         switch (interaction.customId) {
-            case 'close': {
-                const guild = client.guilds.cache.get(config.modmail.guildId);
-                const category = guild.channels.cache.find((v) => v.id === config.modmail.categoryId || v.name === 'ModMail');
+            case 'reply_ticket': {
+                const modal = new ModalBuilder()
+                    .setCustomId('reply_modal')
+                    .setTitle('Rispondi al Ticket');
 
-                if (interaction.channel.parentId !== category.id) return;
+                const messageInput = new TextInputBuilder()
+                    .setCustomId('reply_message_input')
+                    .setLabel("Il tuo messaggio di risposta")
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(true);
+                    
+                const anonymousInput = new TextInputBuilder()
+                    .setCustomId('reply_anonymous_input')
+                    .setLabel("Vuoi rispondere in anonimo? (sì/no)")
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+                    .setMaxLength(3)
+                    .setPlaceholder('Scrivi "sì" per nascondere il tuo nome.');
 
-                await interaction.reply({
-                    content: 'Please wait...',
-                    ephemeral: true
-                });
+                modal.addComponents(
+                    new ActionRowBuilder().addComponents(messageInput),
+                    new ActionRowBuilder().addComponents(anonymousInput)
+                );
+
+                await interaction.showModal(modal);
+                break;
+            }
+
+            case 'close_ticket': {
+                await interaction.reply({ content: 'Chiusura del ticket in corso...', ephemeral: true });
 
                 const transcriptMessages = [];
-
                 const messages = await interaction.channel.messages.fetch();
 
                 for (const message of messages.values()) {
-                    if (message.embeds && message.author.id === client.user.id) {
-                        transcriptMessages.push(`[${new Date(message.createdTimestamp).toLocaleString()}] ${message.embeds[0]?.author?.name}: ${(message.embeds[0]?.description || message.embeds[0]?.image?.proxyURL || '[Error: Unable to fetch message content]')} ${message.attachments?.size > 0 ? message.attachments.map((v) => v.proxyURL).join(' ') : ''}`);
-                    } else if ((message.content || message.attachments?.size) && message.author.bot === false) {
-                        transcriptMessages.push(`[${new Date(message.createdTimestamp).toLocaleString()}] ${message.author.displayName}: ${message.content} ${message.attachments?.size > 0 ? message.attachments.map((v) => v.proxyURL).join(' ') : ''}`);
-                    } else continue;
-                };
-
+                    if (message.embeds.length > 0 && message.author.id === client.user.id) {
+                        const embed = message.embeds[0];
+                        transcriptMessages.push(`[${new Date(message.createdTimestamp).toLocaleString()}] ${embed.author?.name || 'Bot'}: ${embed.description || ''}`);
+                    } else if (message.content) {
+                        transcriptMessages.push(`[${new Date(message.createdTimestamp).toLocaleString()}] ${message.author.displayName}: ${message.content}`);
+                    }
+                }
                 transcriptMessages.reverse();
                 
-                // This will remove the first messages when the mail is created, do not touch this to avoid future errors.
-                transcriptMessages.shift();
-                transcriptMessages.shift();
-
                 const data = (await db.select('mails', { channelId: interaction.channelId }))[0];
+                if (data) {
+                    await db.delete('mails', { channelId: interaction.channelId });
+                }
 
-                await interaction.channel.delete();
+                await interaction.channel.delete('Ticket ModMail chiuso.');
 
-                const user = client.users.cache.get(data?.authorId);
-
+                if (!data) return;
+                const user = await client.users.fetch(data.authorId).catch(() => null);
                 if (!user) return;
 
                 await user.send({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setTitle('Your mail has been closed.')
-                            .setDescription(`**${interaction.user.displayName}** has closed your mail since it's marked as completed. Thank you for using our support!`)
-                            .setFooter({
-                                text: `${interaction.guild.name} devs`
-                            })
-                    ]
+                    embeds: [ new EmbedBuilder().setTitle('Il tuo mail è stato chiuso.').setDescription(`**${interaction.user.displayName}** ha chiuso il tuo mail. Grazie per averci contattato!`) ]
                 }).catch(null);
 
                 await user.send({
-                    content: 'Mail messages history:',
-                    files: [
-                        new AttachmentBuilder(
-                            Buffer.from(transcriptMessages.join('\n'), 'utf-8'), { name: 'history.txt' }
-                        )
-                    ]
+                    content: 'Ecco la cronologia dei messaggi del tuo ticket:',
+                    files: [ new AttachmentBuilder(Buffer.from(transcriptMessages.join('\n'), 'utf-8'), { name: 'cronologia-ticket.txt' })]
                 }).catch(null);
 
-                if (!webhookClient) break;
-
-                await webhookClient.send({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setTitle('Mail closed')
-                            .setDescription(`<@${data?.authorId || '000000000000000000'}>'s mail has been closed by a staff.\n\n**Executed by**: ${interaction.user.displayName} (${interaction.user.toString()})\n**Date**: ${time(Date.now(), 'f')} (${time(Date.now(), 'R')})`)
-                            .setFooter({ text: interaction.guild.name + '\'s  logging system' })
-                            .setColor('Red')
-                    ]
-                });
-
+                if (webhookClient) {
+                    await webhookClient.send({
+                        embeds: [ new EmbedBuilder().setTitle('Mail chiuso').setDescription(`Il mail di <@${data.authorId}> è stato chiuso da ${interaction.user.toString()}.`).setColor('Red') ]
+                    });
+                }
                 break;
             };
         };
-
     }
 });
