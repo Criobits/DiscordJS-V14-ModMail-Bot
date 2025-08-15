@@ -77,6 +77,11 @@ module.exports = new eventshandler.event({
                 try {
                     await author.send({ embeds: [new EmbedBuilder().setTitle('Il tuo ticket è stato chiuso').setDescription(`**Motivo**: ${reason}`)] });
                     
+                    await author.send({
+                        content: 'Ecco la cronologia dei messaggi del tuo ticket:',
+                        files: [new AttachmentBuilder(Buffer.from(transcript), { name: `cronologia-${channel.name}.txt` })]
+                    });
+                    
                     const feedbackRow = new ActionRowBuilder().addComponents(
                         [1, 2, 3, 4, 5].map(rating => new ButtonBuilder().setCustomId(`feedback_${rating}_${data.id}`).setLabel('⭐️'.repeat(rating)).setStyle(ButtonStyle.Primary))
                     );
