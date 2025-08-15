@@ -14,7 +14,7 @@ module.exports = new eventshandler.event({
         if (!guild) return console.error("ID Gilda non valido.".red);
 
         try {
-            // Logica per i messaggi inviati in un server (canali)
+            // Logica per i canali del server
             if (message.guild) {
                 // Controlla se è un comando personalizzato
                 if (message.content.startsWith('!')) {
@@ -37,7 +37,7 @@ module.exports = new eventshandler.event({
                         
                         await message.channel.send({ embeds: [embed] });
                         await message.delete().catch(() => {});
-                        return; // Ferma l'esecuzione se è un comando personalizzato
+                        return;
                     }
                 }
 
@@ -102,16 +102,20 @@ module.exports = new eventshandler.event({
                             });
                         }
 
-                        let logMessage = content ? content.substring(0, 1024) : '';
-                        if (attachments.size > 0) {
+                        // --- BLOCCO LOG CORRETTO ---
+                        let logMessage = content ? content.substring(0, 1024) : '(Nessun testo, solo allegati)';
+                        if (content && attachments.size > 0) {
                             logMessage += `\n*(${attachments.size} allegato/i inviato/i)*`;
+                        } else if (!content && attachments.size > 0) {
+                            logMessage = `*(${attachments.size} allegato/i inviato/i)*`;
                         }
 
                         await logAction('Risposta Rapida Inviata', isAnonReply ? 'Greyple' : 'Green', [
                             { name: 'Ticket', value: message.channel.toString() },
                             { name: 'Staff', value: `${message.author.toString()}${isAnonReply ? ' (Anonimo)' : ''}` },
-                            { name: 'Messaggio', value: logMessage || '(Nessun testo, solo allegati)' }
+                            { name: 'Messaggio', value: logMessage }
                         ]);
+                        // --- FINE BLOCCO LOG ---
 
                         await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, ticket.id]);
                         await message.delete();
