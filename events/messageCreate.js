@@ -14,12 +14,13 @@ module.exports = new eventshandler.event({
         if (!guild) return console.error("ID Gilda non valido.".red);
 
         try {
-            // Logica per i canali del server
+            // Logica per i messaggi inviati in un server (canali)
             if (message.guild) {
-                // Controlla se è un comando personalizzato
+                // Controlla se è un comando (inizia con !)
                 if (message.content.startsWith('!')) {
                     const commandName = message.content.substring(1).split(' ')[0].toLowerCase();
                     
+                    // Cerca prima un comando personalizzato
                     const [customCmdData] = await db.execute('SELECT * FROM custom_commands WHERE commandName = ? AND guildId = ?', [commandName, message.guild.id]);
 
                     if (customCmdData.length > 0) {
@@ -35,13 +36,41 @@ module.exports = new eventshandler.event({
                             embed.setThumbnail(cmd.embedThumbnail);
                         }
                         
+                        // Invia l'embed nel canale dove è stato eseguito il comando
                         await message.channel.send({ embeds: [embed] });
                         await message.delete().catch(() => {});
-                        return;
+
+                        // Controlla se il canale è un ticket attivo
+                        const [ticketData] = await db.execute('SELECT * FROM mails WHERE channelId = ? AND closed = ?', [message.channel.id, false]);
+                        if (ticketData.length > 0) {
+                            const ticket = ticketData[0];
+                            const user = await client.users.fetch(ticket.authorId).catch(() => null);
+
+                            if (user) {
+                                try {
+                                    // Se è un ticket, invia l'embed anche all'utente
+                                    await user.send({ embeds: [embed] });
+
+                                    // Aggiorna il timestamp e logga l'azione come una risposta
+                                    await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, ticket.id]);
+                                    await logAction('Comando Personalizzato Inviato', 'Gold', [
+                                        { name: 'Ticket', value: message.channel.toString() },
+                                        { name: 'Staff', value: message.author.toString() },
+                                        { name: 'Comando Usato', value: `\`!${commandName}\`` }
+                                    ]);
+
+                                } catch (error) {
+                                    console.error(`Impossibile inviare DM del comando personalizzato a ${ticket.authorId}`, error);
+                                    const tempMsg = await message.channel.send({ content: `*(Attenzione: Impossibile inviare questo messaggio all'utente. Potrebbe avere i DM chiusi.)*` });
+                                    setTimeout(() => tempMsg.delete().catch(() => {}), 10000);
+                                }
+                            }
+                        }
+                        return; // Ferma l'esecuzione per non processare !r e !ar
                     }
                 }
 
-                // Logica per i canali dei ticket (COMANDI RAPIDI)
+                // Logica per i canali dei ticket (COMANDI RAPIDI !r e !ar)
                 const [ticketData] = await db.execute('SELECT * FROM mails WHERE channelId = ? AND closed = ?', [message.channel.id, false]);
                 if (ticketData.length === 0) return;
 
@@ -79,10 +108,7 @@ module.exports = new eventshandler.event({
                         }
 
                         if (attachments.size > 0) {
-                            await user.send({
-                                content: `Hai ricevuto ${attachments.size} allegato/i:`,
-                                files: attachments.map(a => a)
-                            });
+                            await user.send({ content: `Hai ricevuto ${attachments.size} allegato/i:`, files: attachments.map(a => a) });
                         }
 
                         if (content) {
@@ -96,13 +122,9 @@ module.exports = new eventshandler.event({
                         }
                         
                         if (attachments.size > 0) {
-                            await message.channel.send({
-                                content: `Allegati inviati da ${message.author.displayName}:`,
-                                files: attachments.map(a => a)
-                            });
+                            await message.channel.send({ content: `Allegati inviati da ${message.author.displayName}:`, files: attachments.map(a => a) });
                         }
 
-                        // --- BLOCCO LOG CORRETTO ---
                         let logMessage = content ? content.substring(0, 1024) : '(Nessun testo, solo allegati)';
                         if (content && attachments.size > 0) {
                             logMessage += `\n*(${attachments.size} allegato/i inviato/i)*`;
@@ -115,7 +137,6 @@ module.exports = new eventshandler.event({
                             { name: 'Staff', value: `${message.author.toString()}${isAnonReply ? ' (Anonimo)' : ''}` },
                             { name: 'Messaggio', value: logMessage }
                         ]);
-                        // --- FINE BLOCCO LOG ---
 
                         await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, ticket.id]);
                         await message.delete();
