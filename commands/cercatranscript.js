@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require("discord.js");
 const { commandshandler, db } = require("..");
+const { footer } = require("../functions");
 
 module.exports = new commandshandler.command({
     type: 1,
@@ -29,7 +30,8 @@ module.exports = new commandshandler.command({
             const embed = new EmbedBuilder()
                 .setTitle(`Storico Ticket per ${user.tag}`)
                 .setColor('Blue')
-                .setFooter({ text: `Mostrando gli ultimi ${tickets.length} ticket.`});
+                .setFooter(footer)
+                .setTimestamp();
 
             for (const ticket of tickets) {
                 const closedByTag = ticket.closedBy === client.user.id ? 'Sistema' : (await client.users.fetch(ticket.closedBy).catch(() => null))?.tag || 'Sconosciuto';

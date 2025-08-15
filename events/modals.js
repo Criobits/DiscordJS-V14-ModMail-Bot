@@ -1,6 +1,6 @@
 const { EmbedBuilder, AttachmentBuilder, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require("discord.js");
 const { eventshandler, db } = require("..");
-const { logAction } = require("../functions");
+const { logAction, footer } = require("../functions");
 const config = require("../config");
 
 module.exports = new eventshandler.event({
@@ -25,7 +25,7 @@ module.exports = new eventshandler.event({
                 const anonymousResponse = interaction.fields.getTextInputValue('reply_anonymous_input').toLowerCase();
                 const isAnonymous = ['sì', 'si', 'yes', 'y'].includes(anonymousResponse);
                 
-                const userEmbed = new EmbedBuilder().setDescription(message).setColor('Blurple');
+                const userEmbed = new EmbedBuilder().setDescription(message).setColor('Blurple').setFooter(footer).setTimestamp();
                 if (isAnonymous) {
                     userEmbed.setAuthor({ name: `Staff`, iconURL: interaction.guild.iconURL() });
                 } else {
@@ -37,7 +37,9 @@ module.exports = new eventshandler.event({
                 const channelEmbed = new EmbedBuilder()
                     .setDescription(message)
                     .setColor(isAnonymous ? 'Greyple' : 'Green')
-                    .setAuthor({ name: `Risposta da ${interaction.user.displayName}${isAnonymous ? ' (Anonima)' : ''}`, iconURL: interaction.user.displayAvatarURL() });
+                    .setAuthor({ name: `Risposta da ${interaction.user.displayName}${isAnonymous ? ' (Anonima)' : ''}`, iconURL: interaction.user.displayAvatarURL() })
+                    .setFooter(footer)
+                    .setTimestamp();
                 
                 await interaction.channel.send({ embeds: [channelEmbed] });
                 await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, data.id]);
@@ -75,12 +77,8 @@ module.exports = new eventshandler.event({
                 const author = await client.users.fetch(data.authorId).catch(() => ({ tag: 'Utente Sconosciuto' }));
 
                 try {
-                    await author.send({ embeds: [new EmbedBuilder().setTitle('Il tuo ticket è stato chiuso').setDescription(`**Motivo**: ${reason}`)] });
-                    
-                    await author.send({
-                        content: 'Ecco la cronologia dei messaggi del tuo ticket:',
-                        files: [new AttachmentBuilder(Buffer.from(transcript), { name: `cronologia-${channel.name}.txt` })]
-                    });
+                    await author.send({ embeds: [new EmbedBuilder().setTitle('Il tuo ticket è stato chiuso').setDescription(`**Motivo**: ${reason}`).setFooter(footer).setTimestamp()] });
+                    await author.send({ content: 'Ecco la cronologia dei messaggi del tuo ticket:', files: [new AttachmentBuilder(Buffer.from(transcript), { name: `cronologia-${channel.name}.txt` })] });
                     
                     const feedbackRow = new ActionRowBuilder().addComponents(
                         [1, 2, 3, 4, 5].map(rating => new ButtonBuilder().setCustomId(`feedback_${rating}_${data.id}`).setLabel('⭐️'.repeat(rating)).setStyle(ButtonStyle.Primary))
@@ -105,17 +103,11 @@ module.exports = new eventshandler.event({
                     if (transcriptChannel && transcriptChannel.type === ChannelType.GuildText) {
                         const transcriptEmbed = new EmbedBuilder()
                             .setAuthor({ name: `Transcript per ${author.tag} - Ticket #${data.id}` })
-                            .addFields(
-                                { name: 'Autore Ticket', value: `${author.toString()} (\`${data.authorId}\`)`, inline: true },
-                                { name: 'Chiuso da', value: `${interaction.user.toString()} (\`${interaction.user.id}\`)`, inline: true },
-                                { name: 'Motivo', value: reason }
-                            )
-                            .setColor('Orange');
-                        
-                        await transcriptChannel.send({ 
-                            embeds: [transcriptEmbed],
-                            files: [new AttachmentBuilder(Buffer.from(transcript), { name: `cronologia-${channel.name}.txt` })]
-                        });
+                            .addFields({ name: 'Autore Ticket', value: `${author.toString()} (\`${data.authorId}\`)`, inline: true }, { name: 'Chiuso da', value: `${interaction.user.toString()} (\`${interaction.user.id}\`)`, inline: true }, { name: 'Motivo', value: reason })
+                            .setColor('Orange')
+                            .setFooter(footer)
+                            .setTimestamp();
+                        await transcriptChannel.send({ embeds: [transcriptEmbed], files: [new AttachmentBuilder(Buffer.from(transcript), { name: `cronologia-${channel.name}.txt` })] });
                     } else {
                         console.error("L'ID del canale transcript non è valido o non è un canale testuale.".red);
                     }

@@ -1,29 +1,76 @@
 const { EmbedBuilder, StringSelectMenuBuilder, ActionRowBuilder, roleMention, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const { eventshandler, db, webhookClient } = require("..");
 const config = require("../config");
-const { logAction } = require("../functions");
+const { logAction, footer } = require("../functions");
 
 const set = new Set();
 
 module.exports = new eventshandler.event({
     event: 'messageCreate',
     run: async (client, message) => {
-        if (message.author.bot || message.guild) return;
+        if (message.author.bot) return;
 
         const guild = client.guilds.cache.get(config.modmail.guildId);
-        if (!guild) return console.error("ID Gilda non valido o bot non presente nel server specificato in config.js".red);
+        if (!guild) return console.error("ID Gilda non valido.".red);
 
         try {
+            // Logica per i canali dei ticket (NUOVI COMANDI RAPIDI)
             if (message.guild) {
-                const allowedCategoryIds = config.modmail.categories.map(c => c.categoryId);
-                if (!allowedCategoryIds.includes(message.channel.parentId)) return;
-                return;
+                const [ticketData] = await db.execute('SELECT * FROM mails WHERE channelId = ? AND closed = ?', [message.channel.id, false]);
+                if (ticketData.length === 0) return; // Non è un canale di ticket attivo
+
+                const isReply = message.content.startsWith('!r ');
+                const isAnonReply = message.content.startsWith('!ar ');
+
+                if (isReply || isAnonReply) {
+                    const content = message.content.substring(isReply ? 3 : 4).trim();
+                    if (!content) {
+                        const tempMsg = await message.reply({ content: 'Devi specificare un messaggio da inviare.' });
+                        setTimeout(() => tempMsg.delete().catch(() => {}), 5000);
+                        return;
+                    }
+
+                    const ticket = ticketData[0];
+                    const user = await client.users.fetch(ticket.authorId).catch(() => null);
+                    if (!user) {
+                        return message.reply({ content: "Impossibile trovare l'utente del ticket." });
+                    }
+                    
+                    const userEmbed = new EmbedBuilder()
+                        .setDescription(content)
+                        .setColor('Blurple')
+                        .setFooter(footer)
+                        .setTimestamp();
+                    
+                    if (isAnonReply) {
+                        userEmbed.setAuthor({ name: 'Staff', iconURL: guild.iconURL() });
+                    } else {
+                        userEmbed.setAuthor({ name: message.author.displayName, iconURL: message.author.displayAvatarURL() });
+                    }
+                    
+                    try {
+                        await user.send({ embeds: [userEmbed] });
+
+                        const channelEmbed = new EmbedBuilder()
+                            .setDescription(content)
+                            .setColor(isAnonReply ? 'Greyple' : 'Green')
+                            .setAuthor({ name: `Risposta da ${message.author.displayName}${isAnonReply ? ' (Anonima)' : ''}`, iconURL: message.author.displayAvatarURL() })
+                            .setFooter(footer)
+                            .setTimestamp();
+
+                        await message.channel.send({ embeds: [channelEmbed] });
+                        await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, ticket.id]);
+                        await message.delete();
+                    } catch (error) {
+                        message.reply('Impossibile inviare il messaggio. L\'utente potrebbe avere i DM chiusi.');
+                    }
+                }
+            
+            // Logica per i DM (CREAZIONE TICKET)
             } else {
                 const [bannedCheckr] = await db.execute('SELECT * FROM bans WHERE userId = ?', [message.author.id]);
                 if (bannedCheckr.length > 0) {
-                    return message.reply({
-                        content: "Sei attualmente bannato dall'utilizzo del sistema ModMail.\n\n**Motivo**: " + (bannedCheckr[0].reason || 'Nessun motivo fornito.')
-                    });
+                    return message.reply({ content: "Sei attualmente bannato dall'utilizzo del sistema ModMail.\n\n**Motivo**: " + (bannedCheckr[0].reason || 'Nessun motivo fornito.') });
                 }
 
                 const [data] = await db.execute('SELECT * FROM mails WHERE authorId = ? AND closed = ?', [message.author.id, false]);
@@ -31,19 +78,14 @@ module.exports = new eventshandler.event({
                     const channel = guild.channels.cache.get(data[0].channelId);
                     if (channel) {
                         if (message.content) {
-                            const embed = new EmbedBuilder()
-                                .setAuthor({ name: message.author.displayName, iconURL: message.author.displayAvatarURL() })
-                                .setDescription(message.content)
-                                .setColor('Blurple');
+                            const embed = new EmbedBuilder().setAuthor({ name: message.author.displayName, iconURL: message.author.displayAvatarURL() }).setDescription(message.content).setColor('Blurple').setFooter(footer).setTimestamp();
                             await channel.send({ embeds: [embed] });
                         }
-
                         if (message.attachments.size > 0) {
                             for (const attachment of message.attachments.values()) {
                                 await channel.send({ content: `Allegato da ${message.author.displayName}:`, files: [attachment] });
                             }
                         }
-                        
                         await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, data[0].id]);
                         return message.react('📨');
                     }
@@ -75,75 +117,48 @@ module.exports = new eventshandler.event({
                         await i.update({ content: `Creazione del ticket in corso...`, components: [] });
 
                         const now = Date.now();
-                        const [result] = await db.execute(
-                            'INSERT INTO mails (authorId, guildId, channelId, createdAt, lastMessageAt) VALUES (?, ?, ?, ?, ?)',
-                            [message.author.id, guild.id, 'PENDING', now, now]
-                        );
+                        const [result] = await db.execute('INSERT INTO mails (authorId, guildId, channelId, createdAt, lastMessageAt) VALUES (?, ?, ?, ?, ?)', [message.author.id, guild.id, 'PENDING', now, now]);
                         const ticketId = result.insertId;
-
+                        
                         const channelPrefix = selectedCategory.channelName || selectedCategory.id;
                         const channelNameFormat = selectedCategory.channelNameFormat || 'username';
+                        const channelName = channelNameFormat === 'ticketId' ? `${channelPrefix}-${ticketId}` : `${channelPrefix}-${message.author.username.substring(0, 15)}`;
                         
-                        const channelName = channelNameFormat === 'ticketId'
-                            ? `${channelPrefix}-${ticketId}`
-                            : `${channelPrefix}-${message.author.username.substring(0, 15)}`;
-
                         const permissions = [{ id: guild.roles.everyone.id, deny: ['ViewChannel'] }, ...selectedCategory.staffRoles.map(roleId => ({ id: roleId, allow: ['ViewChannel', 'SendMessages', 'AttachFiles', 'ReadMessageHistory'] }))];
+                        const newChannel = await guild.channels.create({ name: channelName, type: 0, parent: selectedCategory.categoryId, permissionOverwrites: permissions });
                         
-                        const newChannel = await guild.channels.create({
-                            name: channelName,
-                            type: 0,
-                            parent: selectedCategory.categoryId,
-                            permissionOverwrites: permissions
-                        });
-
                         await db.execute('UPDATE mails SET channelId = ? WHERE id = ?', [newChannel.id, ticketId]);
-
                         await i.editReply({ content: `Il tuo ticket in **${selectedCategory.name}** è stato creato!` });
-
+                        
                         const embed = new EmbedBuilder()
                             .setAuthor({ name: message.author.displayName, iconURL: message.author.displayAvatarURL() })
                             .setDescription(message.content || '(Nessun messaggio di testo)')
                             .setColor('Blurple')
                             .setTitle(`Nuovo Ticket #${ticketId} - ${selectedCategory.name}`)
-                            .addFields({ name: 'Utente', value: `${message.author.tag} (\`${message.author.id}\`)` });
-
+                            .addFields({ name: 'Utente', value: `${message.author.tag} (\`${message.author.id}\`)` })
+                            .setFooter(footer)
+                            .setTimestamp();
+                        
                         const ticketActionRow = new ActionRowBuilder().addComponents(
                             new ButtonBuilder().setCustomId('reply_ticket').setLabel('Rispondi').setStyle(ButtonStyle.Success).setEmoji('✉️'),
                             new ButtonBuilder().setCustomId('close_ticket').setLabel('Chiudi Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒')
                         );
-
-                        await newChannel.send({
-                            content: selectedCategory.mentionStaffRolesOnNewMail ? selectedCategory.staffRoles.map(r => roleMention(r)).join(' ') : null,
-                            embeds: [embed],
-                            components: [ticketActionRow]
-                        }).then(sentPin => sentPin.pin());
-
+                        
+                        await newChannel.send({ content: selectedCategory.mentionStaffRolesOnNewMail ? selectedCategory.staffRoles.map(r => roleMention(r)).join(' ') : null, embeds: [embed], components: [ticketActionRow] }).then(sentPin => sentPin.pin());
+                        
                         if (message.attachments.size > 0) {
                             for (const attachment of message.attachments.values()) {
                                 await newChannel.send({ content: `Allegato iniziale da ${message.author.displayName}:`, files: [attachment] });
                             }
                         }
-
-                        await logAction('Nuovo Ticket Creato', 'Green', [
-                            { name: 'Ticket ID', value: `#${ticketId}`, inline: true },
-                            { name: 'Autore', value: message.author.toString(), inline: true },
-                            { name: 'Categoria', value: selectedCategory.name, inline: true },
-                            { name: 'Canale', value: newChannel.toString() }
-                        ]);
-
+                        
+                        await logAction('Nuovo Ticket Creato', 'Green', [{ name: 'Ticket ID', value: `#${ticketId}`, inline: true }, { name: 'Autore', value: message.author.toString(), inline: true }, { name: 'Categoria', value: selectedCategory.name, inline: true }, { name: 'Canale', value: newChannel.toString() }]);
                     } catch (error) {
                         console.error("ERRORE DURANTE LA CREAZIONE DEL TICKET:", error);
                         await i.editReply({ content: 'Si è verificato un errore durante la creazione del ticket. Contatta un amministratore.', components: [] }).catch(console.error);
                     }
                 });
-                
-                collector.on('end', (collected, reason) => {
-                    if (reason === 'time') {
-                        set.delete(message.author.id);
-                        sent.edit({ content: 'Richiesta di apertura ticket scaduta.', components: [] }).catch(() => {});
-                    }
-                });
+                collector.on('end', (collected, reason) => { if (reason === 'time') { set.delete(message.author.id); sent.edit({ content: 'Richiesta di apertura ticket scaduta.', components: [] }).catch(() => {}); } });
             }
         } catch (error) {
             console.error("ERRORE GENERALE IN messageCreate:", error);

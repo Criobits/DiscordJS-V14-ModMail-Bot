@@ -28,6 +28,11 @@ const permissionsCalculator = (member) => {
     return final;
 };
 
+const footer = {
+    text: 'Supporto WildLands',
+    iconURL: 'https://upload.criobits.com/u/bBDI4R4jqwM8.png'
+};
+
 /**
  * Invia un log dettagliato al webhook configurato.
  * @param {string} title - Il titolo del log.
@@ -40,7 +45,8 @@ async function logAction(title, color, fields = []) {
     const embed = new EmbedBuilder()
         .setTitle(title)
         .setColor(color)
-        .setTimestamp();
+        .setTimestamp()
+        .setFooter(footer);
     
     if (fields.length > 0) {
         embed.addFields(fields);
@@ -57,5 +63,6 @@ module.exports = {
     wait,
     time,
     permissionsCalculator,
-    logAction
+    logAction,
+    footer
 };

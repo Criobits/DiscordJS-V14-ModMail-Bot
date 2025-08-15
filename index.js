@@ -5,6 +5,7 @@ require('colors');
 require('dotenv').config();
 const config = require("./config.js");
 const projectVersion = require('./package.json').version;
+const { footer } = require('./functions');
 
 const client = new Client({
     intents: [
@@ -97,7 +98,7 @@ async function checkInactivity() {
 
             if (!ticket.inactivityWarningSent && timeSinceLastMessage >= config.options.inactivityTimeout) {
                 await channel.send({
-                    embeds: [new EmbedBuilder().setTitle('Avviso di Inattività').setDescription(`Questo ticket non riceve risposte da oltre ${config.options.inactivityTimeout} ore. Verrà chiuso automaticamente tra ${config.options.inactivityClose - config.options.inactivityTimeout} ore se non ci saranno ulteriori messaggi.`).setColor('Yellow')]
+                    embeds: [new EmbedBuilder().setTitle('Avviso di Inattività').setDescription(`Questo ticket non riceve risposte da oltre ${config.options.inactivityTimeout} ore. Verrà chiuso automaticamente tra ${config.options.inactivityClose - config.options.inactivityTimeout} ore se non ci saranno ulteriori messaggi.`).setColor('Yellow').setFooter(footer).setTimestamp()]
                 });
                 await db.execute('UPDATE mails SET inactivityWarningSent = ? WHERE id = ?', [true, ticket.id]);
             }
