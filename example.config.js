@@ -1,7 +1,7 @@
 module.exports = {
     client: {
-        token: process.env.CLIENT_TOKEN || '', // Il token del tuo bot
-        id: process.env.CLIENT_ID || '' // L'ID del tuo bot
+        token: process.env.CLIENT_TOKEN || '',
+        id: process.env.CLIENT_ID || ''
     },
     database: {
         host: process.env.DB_HOST || 'localhost',
@@ -10,7 +10,7 @@ module.exports = {
         password: process.env.DB_PASSWORD || ''
     },
     modmail: {
-        guildId: '', // L'ID del tuo server
+        guildId: '',
         transcriptChannelId: '1365783421292646401',
         categories: [
             {
