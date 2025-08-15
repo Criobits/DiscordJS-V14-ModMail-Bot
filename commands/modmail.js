@@ -27,7 +27,23 @@ module.exports = new commandshandler.command({
             sub.setName('autoclose')
                 .setDescription('Attiva un timer di 24h per la chiusura automatica del ticket.')
         )
+        .addSubcommand((sub) =>
+            sub.setName('create')
+                .setDescription('Crea un nuovo ticket per un utente.')
+                .addUserOption(opt => opt.setName('utente').setDescription('L\'utente per cui creare il ticket.').setRequired(true))
+                .addStringOption(opt => opt.setName('categoria').setDescription('La categoria del ticket.').setRequired(true).setAutocomplete(true))
+        )
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+    autocomplete: async (client, interaction) => {
+        const focusedOption = interaction.options.getFocused(true);
+		if (focusedOption.name === 'categoria') {
+            const choices = config.modmail.categories.map(cat => ({ name: cat.name, value: cat.id }));
+            const filtered = choices.filter(choice => choice.name.toLowerCase().startsWith(focusedOption.value.toLowerCase()));
+            await interaction.respond(filtered);
+        }
+    },
+
     run: async (client, interaction) => {
         try {
             const { options } = interaction;
@@ -85,13 +101,9 @@ module.exports = new commandshandler.command({
 
                 case 'autoclose': {
                     const [ticketData] = await db.execute('SELECT * FROM mails WHERE channelId = ? AND closed = ?', [interaction.channelId, false]);
-                    if (ticketData.length === 0) {
-                        return interaction.reply({ content: 'Questo comando può essere usato solo in un canale di un ticket aperto.', ephemeral: true });
-                    }
+                    if (ticketData.length === 0) return interaction.reply({ content: 'Questo comando può essere usato solo in un canale di un ticket aperto.', ephemeral: true });
                     const ticket = ticketData[0];
-                    if (ticket.autoCloseAt) {
-                        return interaction.reply({ content: 'Un timer per la chiusura automatica è già attivo per questo ticket.', ephemeral: true });
-                    }
+                    if (ticket.autoCloseAt) return interaction.reply({ content: 'Un timer per la chiusura automatica è già attivo per questo ticket.', ephemeral: true });
                     const closeTimestamp = Date.now() + 24 * 60 * 60 * 1000;
                     const closeTimeFormatted = `<t:${Math.floor(closeTimestamp / 1000)}:R>`;
                     await db.execute('UPDATE mails SET autoCloseAt = ? WHERE id = ?', [closeTimestamp, ticket.id]);
@@ -110,11 +122,56 @@ module.exports = new commandshandler.command({
                     await interaction.reply({ content: `Timer di 24 ore per la chiusura automatica attivato. Qualsiasi nuova risposta annullerà il timer.`, ephemeral: true });
                     break;
                 }
+
+                case 'create': {
+                    await interaction.deferReply({ ephemeral: true });
+                    const user = options.getUser('utente');
+                    const categoryId = options.getString('categoria');
+                    const selectedCategory = config.modmail.categories.find(c => c.id === categoryId);
+                    if (!selectedCategory) return interaction.editReply({ content: 'Categoria non valida. Per favore scegline una dalla lista.' });
+                    const [existingTicket] = await db.execute('SELECT * FROM mails WHERE authorId = ? AND closed = ?', [user.id, false]);
+                    if (existingTicket.length > 0) {
+                        const channel = interaction.guild.channels.cache.get(existingTicket[0].channelId);
+                        return interaction.editReply({ content: `Questo utente ha già un ticket aperto: ${channel ? channel.toString() : 'canale non trovato'}.` });
+                    }
+                    const now = Date.now();
+                    const [result] = await db.execute('INSERT INTO mails (authorId, guildId, channelId, createdAt, lastMessageAt) VALUES (?, ?, ?, ?, ?)', [user.id, interaction.guild.id, 'PENDING', now, now]);
+                    const ticketId = result.insertId;
+                    const channelPrefix = selectedCategory.channelName || selectedCategory.id;
+                    const channelNameFormat = selectedCategory.channelNameFormat || 'username';
+                    const channelName = channelNameFormat === 'ticketId' ? `${channelPrefix}-${ticketId}` : `${channelPrefix}-${user.username.substring(0, 15)}`;
+                    const permissions = [{ id: interaction.guild.roles.everyone.id, deny: ['ViewChannel'] }, ...selectedCategory.staffRoles.map(roleId => ({ id: roleId, allow: ['ViewChannel', 'SendMessages', 'AttachFiles', 'ReadMessageHistory'] }))];
+                    const newChannel = await interaction.guild.channels.create({ name: channelName, type: 0, parent: selectedCategory.categoryId, permissionOverwrites: permissions });
+                    await db.execute('UPDATE mails SET channelId = ? WHERE id = ?', [newChannel.id, ticketId]);
+                    const embed = new EmbedBuilder()
+                        .setAuthor({ name: user.displayName, iconURL: user.displayAvatarURL() })
+                        .setDescription(`Questo ticket è stato aperto manualmente dallo staff.`)
+                        .setColor('Blurple')
+                        .setTitle(`Nuovo Ticket #${ticketId} - ${selectedCategory.name}`)
+                        .addFields({ name: 'Utente', value: `${user.tag} (\`${user.id}\`)` }, { name: 'Aperto da', value: interaction.user.toString() })
+                        .setFooter(footer)
+                        .setTimestamp();
+                    const ticketActionRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('reply_ticket').setLabel('Rispondi').setStyle(ButtonStyle.Success).setEmoji('✉️'),
+                        new ButtonBuilder().setCustomId('close_ticket').setLabel('Chiudi Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+                    );
+                    await newChannel.send({ content: selectedCategory.mentionStaffRolesOnNewMail ? selectedCategory.staffRoles.map(r => roleMention(r)).join(' ') : null, embeds: [embed], components: [ticketActionRow] }).then(sentPin => sentPin.pin());
+                    try {
+                        await user.send({ embeds: [new EmbedBuilder().setTitle('Lo Staff ha aperto un Ticket per te').setDescription(`Un membro dello staff ha aperto un ticket per discutere con te. Puoi rispondere direttamente a questo messaggio.`).setColor('Green').setFooter(footer).setTimestamp()] });
+                    } catch (error) {
+                        await newChannel.send(`*(Attenzione: non è stato possibile notificare l'utente in DM. Potrebbe avere i DM chiusi.)*`);
+                    }
+                    await logAction(client, 'Ticket Creato dallo Staff', 'Green', [{ name: 'Ticket ID', value: `#${ticketId}`, inline: true }, { name: 'Per Utente', value: user.toString(), inline: true }, { name: 'Staff', value: interaction.user.toString(), inline: true }, { name: 'Categoria', value: selectedCategory.name, inline: true }, { name: 'Canale', value: newChannel.toString(), inline: true }]);
+                    await interaction.editReply({ content: `Ticket creato con successo per ${user.tag} in ${newChannel.toString()}.` });
+                    break;
+                }
             }
         } catch (error) {
             console.error("ERRORE NEL COMANDO /modmail:", error);
-            if (!interaction.replied) {
+            if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({ content: 'Si è verificato un errore durante l\'esecuzione del comando.', ephemeral: true }).catch(() => {});
+            } else {
+                await interaction.editReply({ content: 'Si è verificato un errore durante l\'esecuzione del comando.' }).catch(() => {});
             }
         }
     }
