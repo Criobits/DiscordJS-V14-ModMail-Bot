@@ -12,6 +12,7 @@ module.exports = {
     modmail: {
         guildId: '', // ID del Server
         transcriptChannelId: '', // ID del canale per i Transcripts
+        logChannelId: '', // ID del canale per i Logs
         categories: [
             {
                 name: 'Supporto Generale',
@@ -29,8 +30,5 @@ module.exports = {
     options: {
     inactivityTimeout: 48, // Ore prima dell'avviso di inattività
     inactivityClose: 72    // Ore prima della chiusura automatica
-    },
-    logs: {
-        webhookURL: process.env.WEBHOOK_URL || ''
     }
 };

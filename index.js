@@ -1,5 +1,5 @@
 const { CommandsHandler, EventsHandler } = require('horizon-handler');
-const { Client, GatewayIntentBits, Partials, WebhookClient, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.js');
 const mysql = require('mysql2/promise');
 require('colors');
 require('dotenv').config();
@@ -18,21 +18,13 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message],
     presence: {
         activities: [{
-            name: "Scrivimi in DM per creare un mail!",
+            name: "Scrivimi in DM per creare un ticket!",
             type: 1,
             url: "https://criobits.com"
         }]
     },
     shards: "auto"
 });
-
-const webhookClient = (config.logs.webhookURL) ? new WebhookClient({ url: config.logs.webhookURL }) : null;
-
-if (webhookClient) {
-    console.log('Webhook client inizializzato con successo. I log sono ATTIVI.'.cyan);
-} else {
-    console.log('URL del webhook non trovato in config.js. I log saranno DISABILITATI.'.yellow);
-}
 
 const db = mysql.createPool({
     host: config.database.host,
@@ -140,7 +132,7 @@ client.login(config.client.token).catch((e) => {
 });
 
 client.once('ready', () => {
-    setInterval(checkInactivity, 1000 * 60 * 60); // Esegui ogni ora
+    setInterval(checkInactivity, 1000 * 60 * 60);
 });
 
 const commandshandler = new CommandsHandler('./commands/', false);
@@ -151,7 +143,6 @@ eventshandler.on('fileLoad', (event) => console.log('Loaded event: ' + event));
 
 module.exports = {
     client,
-    webhookClient,
     db,
     commandshandler,
     eventshandler

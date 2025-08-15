@@ -1,32 +1,5 @@
-const { GuildMember, EmbedBuilder } = require("discord.js");
-const { webhookClient } = require('..');
-
-/**
- * @param {number} ms
- */
-const wait = (ms) => {
-    return new Promise((res) => setTimeout(res, ms));
-};
-
-/**
- * @param {number} ms
- * @param {import("discord.js").TimestampStylesString} style
- */
-const time = (ms, style) => {
-    return `<t:${Math.floor(ms / 1000)}${style ? `:${style}>` : '>'}`;
-};
-
-/**
- * @param {GuildMember} member 
- */
-const permissionsCalculator = (member) => {
-    let final = 'Member';
-    if (member.permissions.has('BanMembers') || member.permissions.has('KickMembers')) final = 'Moderator';
-    if (member.permissions.has('ManageGuild')) final = 'Manager';
-    if (member.permissions.has('Administrator')) final = 'Administrator';
-    if (member.user.id === member.guild.ownerId) final = 'Owner';
-    return final;
-};
+const { GuildMember, EmbedBuilder, ChannelType } = require("discord.js");
+const config = require("../config");
 
 const footer = {
     text: 'Supporto WildLands',
@@ -34,38 +7,44 @@ const footer = {
 };
 
 /**
- * Invia un log dettagliato al webhook configurato.
+ * Invia un log dettagliato in un canale testuale.
+ * @param {import("discord.js").Client} client - L'istanza del client del bot.
  * @param {string} title - Il titolo del log.
  * @param {import("discord.js").ColorResolvable} color - Il colore dell'embed.
  * @param {Array<{name: string, value: string, inline?: boolean}>} fields - I campi da aggiungere all'embed.
  */
-async function logAction(title, color, fields = []) {
-    if (!webhookClient) {
-        console.log(`Tentativo di inviare il log "${title}", ma il webhook non è configurato in config.js.`.yellow);
+async function logAction(client, title, color, fields = []) {
+    const logChannelId = config.modmail.logChannelId;
+    if (!logChannelId) {
+        console.log(`Tentativo di inviare il log "${title}", ma logChannelId non è configurato in config.js.`.yellow);
         return;
     }
 
-    const embed = new EmbedBuilder()
-        .setTitle(title)
-        .setColor(color)
-        .setTimestamp()
-        .setFooter(footer);
-    
-    if (fields.length > 0) {
-        embed.addFields(fields);
-    }
-
     try {
-        await webhookClient.send({ embeds: [embed] });
+        const logChannel = await client.channels.fetch(logChannelId);
+        if (!logChannel || logChannel.type !== ChannelType.GuildText) {
+            console.error(`logChannelId (${logChannelId}) non è un canale testuale valido.`.red);
+            return;
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle(title)
+            .setColor(color)
+            .setTimestamp()
+            .setFooter(footer);
+        
+        if (fields.length > 0) {
+            embed.addFields(fields);
+        }
+
+        await logChannel.send({ embeds: [embed] });
+
     } catch (error) {
-        console.error("Impossibile inviare il log tramite webhook:", error);
+        console.error("Impossibile inviare il log nel canale:", error);
     }
 }
 
 module.exports = {
-    wait,
-    time,
-    permissionsCalculator,
     logAction,
     footer
 };

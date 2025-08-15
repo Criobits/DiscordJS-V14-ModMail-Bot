@@ -44,7 +44,7 @@ module.exports = new eventshandler.event({
                 await interaction.channel.send({ embeds: [channelEmbed] });
                 await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, data.id]);
                 
-                await logAction('Risposta Inviata', isAnonymous ? 'Greyple' : 'Green', [{ name: 'Ticket', value: interaction.channel.toString() }, { name: 'Staff', value: `${interaction.user.toString()}${isAnonymous ? ' (Anonimo)' : ''}` }, { name: 'Messaggio', value: message.substring(0, 1024) }]);
+                await logAction(client, 'Risposta Inviata', isAnonymous ? 'Greyple' : 'Green', [{ name: 'Ticket', value: interaction.channel.toString() }, { name: 'Staff', value: `${interaction.user.toString()}${isAnonymous ? ' (Anonimo)' : ''}` }, { name: 'Messaggio', value: message.substring(0, 1024) }]);
                 await interaction.editReply({ content: 'Risposta inviata con successo!' });
             }
             
@@ -67,6 +67,7 @@ module.exports = new eventshandler.event({
                     if (msg.embeds.length > 0 && msg.author.id === client.user.id) {
                         const embed = msg.embeds[0];
                         const timestamp = new Date(msg.createdTimestamp).toLocaleString('it-IT');
+                        
                         const sender = embed.author ? embed.author.name : (embed.title || 'Sistema');
                         const content = embed.description || '(Nessun testo)';
 
@@ -95,11 +96,11 @@ module.exports = new eventshandler.event({
                         await db.execute('INSERT INTO ratings (ticketId, userId, rating, timestamp) VALUES (?, ?, ?, ?)', [data.id, author.id, rating, Date.now()]);
                         await btnInteraction.update({ content: `Grazie per aver lasciato una valutazione di ${'⭐️'.repeat(rating)}!`, components: [] });
                         collector.stop();
-                        await logAction('Feedback Ricevuto', 'Gold', [{ name: 'Utente', value: author.toString(), inline: true }, { name: 'Valutazione', value: `${'⭐️'.repeat(rating)} (${rating}/5)`, inline: true }, { name: 'Ticket ID', value: `#${data.id}` }]);
+                        await logAction(client, 'Feedback Ricevuto', 'Gold', [{ name: 'Utente', value: author.toString(), inline: true }, { name: 'Valutazione', value: `${'⭐️'.repeat(rating)} (${rating}/5)`, inline: true }, { name: 'Ticket ID', value: `#${data.id}` }]);
                     });
                 } catch (e) { console.error(`Impossibile inviare DM di chiusura o feedback a ${data.authorId}`); }
 
-                await logAction('Ticket Chiuso', 'Red', [{ name: 'Ticket (canale)', value: `\`${channel.name}\`` }, { name: 'Chiuso da', value: interaction.user.toString(), inline: true }, { name: 'Autore Ticket', value: author.toString(), inline: true }, { name: 'Motivo', value: reason }]);
+                await logAction(client, 'Ticket Chiuso', 'Red', [{ name: 'Ticket (canale)', value: `\`${channel.name}\`` }, { name: 'Chiuso da', value: interaction.user.toString(), inline: true }, { name: 'Autore Ticket', value: author.toString(), inline: true }, { name: 'Motivo', value: reason }]);
                 
                 const transcriptChannelId = config.modmail.transcriptChannelId;
                 if (transcriptChannelId) {

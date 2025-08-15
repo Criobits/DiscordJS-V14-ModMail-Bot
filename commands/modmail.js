@@ -33,7 +33,7 @@ module.exports = new commandshandler.command({
 
                     await db.execute('INSERT INTO bans (userId, guildId, reason) VALUES (?, ?, ?)', [user.id, interaction.guild.id, reason]);
 
-                    await logAction('Utente Bannato dal ModMail', 'DarkRed', [
+                    await logAction(client, 'Utente Bannato dal ModMail', 'DarkRed', [
                         { name: 'Utente', value: user.toString(), inline: true },
                         { name: 'Staff', value: interaction.user.toString(), inline: true },
                         { name: 'Motivo', value: reason }
@@ -51,7 +51,7 @@ module.exports = new commandshandler.command({
 
                     await db.execute('DELETE FROM bans WHERE userId = ?', [user.id]);
 
-                    await logAction('Utente Sbannato dal ModMail', 'Green', [
+                    await logAction(client, 'Utente Sbannato dal ModMail', 'Green', [
                         { name: 'Utente', value: user.toString(), inline: true },
                         { name: 'Staff', value: interaction.user.toString(), inline: true }
                     ]);

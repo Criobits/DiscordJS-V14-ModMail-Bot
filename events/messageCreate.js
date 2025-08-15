@@ -36,11 +36,9 @@ module.exports = new eventshandler.event({
                             embed.setThumbnail(cmd.embedThumbnail);
                         }
                         
-                        // Invia l'embed nel canale dove è stato eseguito il comando
                         await message.channel.send({ embeds: [embed] });
                         await message.delete().catch(() => {});
 
-                        // Controlla se il canale è un ticket attivo
                         const [ticketData] = await db.execute('SELECT * FROM mails WHERE channelId = ? AND closed = ?', [message.channel.id, false]);
                         if (ticketData.length > 0) {
                             const ticket = ticketData[0];
@@ -48,17 +46,13 @@ module.exports = new eventshandler.event({
 
                             if (user) {
                                 try {
-                                    // Se è un ticket, invia l'embed anche all'utente
                                     await user.send({ embeds: [embed] });
-
-                                    // Aggiorna il timestamp e logga l'azione come una risposta
                                     await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, ticket.id]);
-                                    await logAction('Comando Personalizzato Inviato', 'Gold', [
+                                    await logAction(client, 'Comando Personalizzato Inviato', 'Gold', [
                                         { name: 'Ticket', value: message.channel.toString() },
                                         { name: 'Staff', value: message.author.toString() },
                                         { name: 'Comando Usato', value: `\`!${commandName}\`` }
                                     ]);
-
                                 } catch (error) {
                                     console.error(`Impossibile inviare DM del comando personalizzato a ${ticket.authorId}`, error);
                                     const tempMsg = await message.channel.send({ content: `*(Attenzione: Impossibile inviare questo messaggio all'utente. Potrebbe avere i DM chiusi.)*` });
@@ -66,7 +60,7 @@ module.exports = new eventshandler.event({
                                 }
                             }
                         }
-                        return; // Ferma l'esecuzione per non processare !r e !ar
+                        return;
                     }
                 }
 
@@ -93,12 +87,7 @@ module.exports = new eventshandler.event({
                     
                     try {
                         if (content) {
-                            const userEmbed = new EmbedBuilder()
-                                .setDescription(content)
-                                .setColor('Blurple')
-                                .setFooter(footer)
-                                .setTimestamp();
-                            
+                            const userEmbed = new EmbedBuilder().setDescription(content).setColor('Blurple').setFooter(footer).setTimestamp();
                             if (isAnonReply) {
                                 userEmbed.setAuthor({ name: 'Staff', iconURL: guild.iconURL() });
                             } else {
@@ -112,12 +101,7 @@ module.exports = new eventshandler.event({
                         }
 
                         if (content) {
-                            const channelEmbed = new EmbedBuilder()
-                                .setDescription(content)
-                                .setColor(isAnonReply ? 'Greyple' : 'Green')
-                                .setAuthor({ name: `Risposta da ${message.author.displayName}${isAnonReply ? ' (Anonima)' : ''}`, iconURL: message.author.displayAvatarURL() })
-                                .setFooter(footer)
-                                .setTimestamp();
+                            const channelEmbed = new EmbedBuilder().setDescription(content).setColor(isAnonReply ? 'Greyple' : 'Green').setAuthor({ name: `Risposta da ${message.author.displayName}${isAnonReply ? ' (Anonima)' : ''}`, iconURL: message.author.displayAvatarURL() }).setFooter(footer).setTimestamp();
                             await message.channel.send({ embeds: [channelEmbed] });
                         }
                         
@@ -132,7 +116,7 @@ module.exports = new eventshandler.event({
                             logMessage = `*(${attachments.size} allegato/i inviato/i)*`;
                         }
 
-                        await logAction('Risposta Rapida Inviata', isAnonReply ? 'Greyple' : 'Green', [
+                        await logAction(client, 'Risposta Rapida Inviata', isAnonReply ? 'Greyple' : 'Green', [
                             { name: 'Ticket', value: message.channel.toString() },
                             { name: 'Staff', value: `${message.author.toString()}${isAnonReply ? ' (Anonimo)' : ''}` },
                             { name: 'Messaggio', value: logMessage }
@@ -233,7 +217,7 @@ module.exports = new eventshandler.event({
                             }
                         }
                         
-                        await logAction('Nuovo Ticket Creato', 'Green', [{ name: 'Ticket ID', value: `#${ticketId}`, inline: true }, { name: 'Autore', value: message.author.toString(), inline: true }, { name: 'Categoria', value: selectedCategory.name, inline: true }, { name: 'Canale', value: newChannel.toString() }]);
+                        await logAction(client, 'Nuovo Ticket Creato', 'Green', [{ name: 'Ticket ID', value: `#${ticketId}`, inline: true }, { name: 'Autore', value: message.author.toString(), inline: true }, { name: 'Categoria', value: selectedCategory.name, inline: true }, { name: 'Canale', value: newChannel.toString() }]);
                     } catch (error) {
                         console.error("ERRORE DURANTE LA CREAZIONE DEL TICKET:", error);
                         await i.editReply({ content: 'Si è verificato un errore durante la creazione del ticket. Contatta un amministratore.', components: [] }).catch(console.error);
