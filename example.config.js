@@ -10,19 +10,23 @@ module.exports = {
         password: process.env.DB_PASSWORD || ''
     },
     modmail: {
-        guildId: '',
-        transcriptChannelId: '1365783421292646401',
+        guildId: '', // ID del Server
+        transcriptChannelId: '', // ID del canale per i Transcripts
         categories: [
             {
                 name: 'Supporto Generale',
                 id: 'supporto_generale',
-                categoryId: '',
-                staffRoles: ['ROLE_ID_1'],
+                categoryId: '', // ID della categoria
+                staffRoles: ['ROLE_ID_1'], // ID dei Ruoli che possono vedere il ticket
                 mentionStaffRolesOnNewMail: true,
                 emoji: '🛠️',
                 description: 'Apri un ticket per domande generiche.'
             },
         ]
+    },
+    options: {
+    inactivityTimeout: 48, // Ore prima dell'avviso di inattività
+    inactivityClose: 72    // Ore prima della chiusura automatica
     },
     logs: {
         webhookURL: process.env.WEBHOOK_URL || ''

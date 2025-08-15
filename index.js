@@ -1,5 +1,5 @@
 const { CommandsHandler, EventsHandler } = require('horizon-handler');
-const { Client, GatewayIntentBits, Partials, WebhookClient } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, WebhookClient, EmbedBuilder } = require('discord.js');
 const mysql = require('mysql2/promise');
 require('colors');
 require('dotenv').config();
@@ -55,7 +55,20 @@ async function initializeDatabase() {
                 channelId VARCHAR(255) NOT NULL,
                 closed BOOLEAN DEFAULT FALSE,
                 closedBy VARCHAR(255) NULL,
-                closeReason TEXT NULL
+                closeReason TEXT NULL,
+                createdAt BIGINT NOT NULL,
+                lastMessageAt BIGINT NOT NULL,
+                inactivityWarningSent BOOLEAN DEFAULT FALSE
+            );
+        `);
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS ratings (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                ticketId INT NOT NULL,
+                userId VARCHAR(255) NOT NULL,
+                rating INT NOT NULL,
+                timestamp BIGINT NOT NULL,
+                FOREIGN KEY (ticketId) REFERENCES mails(id) ON DELETE CASCADE
             );
         `);
         console.log('Database tables checked/created successfully.'.green);
@@ -64,11 +77,50 @@ async function initializeDatabase() {
     }
 }
 
+async function checkInactivity() {
+    try {
+        const [openTickets] = await db.execute('SELECT * FROM mails WHERE closed = ?', [false]);
+        if (openTickets.length === 0) return;
+
+        const now = Date.now();
+        const guild = client.guilds.cache.get(config.modmail.guildId);
+        if (!guild) return;
+
+        for (const ticket of openTickets) {
+            const timeSinceLastMessage = (now - ticket.lastMessageAt) / (1000 * 60 * 60); // in ore
+
+            const channel = guild.channels.cache.get(ticket.channelId);
+            if (!channel) {
+                await db.execute('DELETE FROM mails WHERE id = ?', [ticket.id]); // Pulisce ticket orfani
+                continue;
+            };
+
+            if (!ticket.inactivityWarningSent && timeSinceLastMessage >= config.options.inactivityTimeout) {
+                await channel.send({
+                    embeds: [new EmbedBuilder().setTitle('Avviso di Inattività').setDescription(`Questo ticket non riceve risposte da oltre ${config.options.inactivityTimeout} ore. Verrà chiuso automaticamente tra ${config.options.inactivityClose - config.options.inactivityTimeout} ore se non ci saranno ulteriori messaggi.`).setColor('Yellow')]
+                });
+                await db.execute('UPDATE mails SET inactivityWarningSent = ? WHERE id = ?', [true, ticket.id]);
+            }
+            else if (ticket.inactivityWarningSent && timeSinceLastMessage >= config.options.inactivityClose) {
+                const closeReason = `Chiuso automaticamente dopo ${config.options.inactivityClose} ore di inattività.`;
+                
+                await db.execute('UPDATE mails SET closed = ?, closedBy = ?, closeReason = ? WHERE id = ?', [true, client.user.id, closeReason, ticket.id]);
+                await channel.delete(closeReason);
+            }
+        }
+    } catch (error) {
+        console.error("Errore durante il controllo dell'inattività:", error);
+    }
+}
 
 console.log(`ModMail Bot - v${projectVersion}`.cyan.underline);
 
 client.login(config.client.token).catch((e) => {
     console.error('Unable to connect. Invalid token or missing intents?'.red, e);
+});
+
+client.once('ready', () => {
+    setInterval(checkInactivity, 1000 * 60 * 60); // Esegui ogni ora
 });
 
 const commandshandler = new CommandsHandler('./commands/', false);
