@@ -1,6 +1,6 @@
-# DiscordJS-V14-ModMail-Bot (Versione Migliorata)
+# Modmail
 
-Benvenuto in DiscordJS-V14-ModMail-Bot, un progetto di bot Discord originariamente sviluppato da T.F.A#7524 e ora potenziato con funzionalità avanzate e un backend di database MariaDB. Questa versione è progettata per gestire in modo efficiente e sicuro le comunicazioni modmail su un server.
+Benvenuto in Modmail, un progetto di bot Discord originariamente sviluppato da T.F.A#7524 e ora potenziato con funzionalità avanzate e un backend di database MariaDB. Questa versione è progettata per gestire in modo efficiente e sicuro le comunicazioni modmail su un server.
 
 Se trovi utile questo progetto, per favore mostra il tuo supporto mettendo una stella (⭐️) al repository originale! 🙏
 
@@ -10,7 +10,7 @@ Se trovi utile questo progetto, per favore mostra il tuo supporto mettendo una s
 
 * **Facile da usare e configurare**: Il setup è semplice e intuitivo.
 * **Gestione Semplificata**: Semplifica la gestione delle modmail attraverso un'interfaccia pulita.
-* **Sistema di Transcript**: Ogni ticket chiuso genera una cronologia completa della conversazione.
+* **Sistema di Transcript**: Ogni ticket chiuso genera una cronologia completa e pulita della conversazione.
 * **Sistema di Logging con Webhook**: Tiene traccia delle azioni più importanti, come la creazione e la chiusura dei ticket.
 * **Gestione Ban**: Permette di bannare e sbannare utenti dal sistema di ModMail.
 
@@ -18,13 +18,13 @@ Se trovi utile questo progetto, per favore mostra il tuo supporto mettendo una s
 
 ## ✨ Funzionalità Avanzate Aggiunte
 
-Questa versione include miglioramenti significativi per la gestione e la sicurezza:
+Questa versione include miglioramenti significativi per la gestione, la sicurezza e l'archiviazione:
 
-* **Assegnazione dei Ticket**: Un membro dello staff può prendere in carico un ticket con un apposito bottone. Questo chiarisce chi è responsabile della richiesta ed evita risposte multiple.
+* **Archivio Transcript Centralizzato**: Alla chiusura di un ticket, il transcript completo della conversazione viene inviato in un canale dedicato, creando un archivio sicuro e facilmente consultabile.
 * **Logica di Chiusura Migliorata**: Quando un ticket viene chiuso, al membro dello staff viene richiesto un motivo tramite un popup. Questo motivo viene registrato nei log e inviato all'utente.
-* **Log Dettagliati delle Azioni**: Ogni azione critica (risposta, assegnazione, chiusura, ban/unban) viene registrata in modo dettagliato in un canale di log tramite webhook per una maggiore tracciabilità.
+* **Log Dettagliati delle Azioni**: Ogni azione critica (risposta, chiusura, ban/unban) viene registrata in modo dettagliato in un canale di log tramite webhook per una maggiore tracciabilità.
 * **Conferma per Azioni Critiche**: Per prevenire errori, azioni come la chiusura di un ticket richiedono una seconda conferma da parte dello staff.
-* **Backend con MariaDB**: Il bot utilizza `mysql2` per connettersi a un database MariaDB (o MySQL), garantendo maggiore robustezza e scalabilità rispetto al database JSON originale.
+* **Backend con MariaDB**: Il bot utilizza `mysql2` per connettersi a un database MariaDB (o MySQL), garantendo maggiore robustezza e scalabilità.
 
 ---
 
@@ -49,8 +49,9 @@ Per avviare il progetto, segui questi passaggi:
 4.  **Configura il bot**:
     * Rinomina `example.config.js` in `config.js`.
     * Compila i campi nella sezione `client` con il **token** e l'**ID** del tuo bot, che puoi ottenere dal [Discord Developer Portal](https://discord.com/developers).
-    * Nella nuova sezione `database`, inserisci le credenziali di accesso al tuo database MariaDB/MySQL.
-    * Configura le sezioni `modmail` e `logs` con gli ID del tuo server, delle categorie e l'URL del webhook. Puoi anche usare un file `.env` per maggiore sicurezza.
+    * Nella sezione `database`, inserisci le credenziali di accesso al tuo database MariaDB/MySQL.
+    * Configura la sezione `modmail`, inserendo l'ID del tuo server, gli ID delle categorie e, soprattutto, l'ID del **canale per i transcript** (`transcriptChannelId`).
+    * Infine, imposta l'URL del webhook nella sezione `logs`.
 5.  **Avvia il bot**: Esegui `npm run start` o `node .` nel terminale.
 6.  Fatto! Goditi il tuo bot ModMail potenziato.
 
