@@ -110,11 +110,12 @@ module.exports = new eventshandler.event({
                         await logAction('Risposta Rapida Inviata', isAnonReply ? 'Greyple' : 'Green', [
                             { name: 'Ticket', value: message.channel.toString() },
                             { name: 'Staff', value: `${message.author.toString()}${isAnonReply ? ' (Anonimo)' : ''}` },
-                            { name: 'Messaggio', value: logMessage }
+                            { name: 'Messaggio', value: logMessage || '(Nessun testo, solo allegati)' }
                         ]);
 
                         await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, ticket.id]);
                         await message.delete();
+
                     } catch (error) {
                         console.error("Errore invio risposta rapida:", error);
                         message.reply('Impossibile inviare il messaggio. L\'utente potrebbe avere i DM chiusi.');
