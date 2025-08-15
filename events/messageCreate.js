@@ -81,10 +81,12 @@ module.exports = new eventshandler.event({
                         );
                         const ticketId = result.insertId;
 
+                        const channelPrefix = selectedCategory.channelName || selectedCategory.id;
                         const channelNameFormat = selectedCategory.channelNameFormat || 'username';
+                        
                         const channelName = channelNameFormat === 'ticketId'
-                            ? `${selectedCategory.id}-${ticketId}`
-                            : `${selectedCategory.id}-${message.author.username}`;
+                            ? `${channelPrefix}-${ticketId}`
+                            : `${channelPrefix}-${message.author.username.substring(0, 15)}`;
 
                         const permissions = [{ id: guild.roles.everyone.id, deny: ['ViewChannel'] }, ...selectedCategory.staffRoles.map(roleId => ({ id: roleId, allow: ['ViewChannel', 'SendMessages', 'AttachFiles', 'ReadMessageHistory'] }))];
                         

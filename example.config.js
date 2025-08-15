@@ -15,7 +15,8 @@ module.exports = {
         categories: [
             {
                 name: 'Supporto Generale',
-                id: 'supporto_generale',
+                id: 'supporto_generale', // ID unico per la logica interna
+                channelName: 'supporto',   // Nome visualizzato nel canale
                 categoryId: '', // ID della categoria
                 staffRoles: ['ROLE_ID_1'], // ID dei Ruoli che possono vedere il ticket
                 mentionStaffRolesOnNewMail: true,
