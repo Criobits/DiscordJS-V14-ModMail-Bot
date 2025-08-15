@@ -20,44 +20,49 @@ module.exports = new commandshandler.command({
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     run: async (client, interaction) => {
-        const { options } = interaction;
+        try {
+            const { options } = interaction;
 
-        switch (options.getSubcommand()) {
-            case 'ban': {
-                const user = options.getUser('user', true);
-                const reason = options.getString('reason') || 'Nessun motivo fornito';
+            switch (options.getSubcommand()) {
+                case 'ban': {
+                    const user = options.getUser('user', true);
+                    const reason = options.getString('reason') || 'Nessun motivo fornito';
 
-                const [rows] = await db.execute('SELECT * FROM bans WHERE userId = ?', [user.id]);
-                if (rows.length > 0) return interaction.reply({ content: 'Questo utente è già bannato.', ephemeral: true });
+                    const [rows] = await db.execute('SELECT * FROM bans WHERE userId = ?', [user.id]);
+                    if (rows.length > 0) return interaction.reply({ content: 'Questo utente è già bannato.', ephemeral: true });
 
-                await db.execute('INSERT INTO bans (userId, guildId, reason) VALUES (?, ?, ?)', [user.id, interaction.guild.id, reason]);
+                    await db.execute('INSERT INTO bans (userId, guildId, reason) VALUES (?, ?, ?)', [user.id, interaction.guild.id, reason]);
 
-                await logAction('Utente Bannato dal ModMail', 'DarkRed', [
-                    { name: 'Utente', value: user.toString(), inline: true },
-                    { name: 'Staff', value: interaction.user.toString(), inline: true },
-                    { name: 'Motivo', value: reason }
-                ]);
+                    await logAction('Utente Bannato dal ModMail', 'DarkRed', [
+                        { name: 'Utente', value: user.toString(), inline: true },
+                        { name: 'Staff', value: interaction.user.toString(), inline: true },
+                        { name: 'Motivo', value: reason }
+                    ]);
 
-                await interaction.reply({ content: "L'utente è stato bannato con successo.", ephemeral: true });
-                break;
+                    await interaction.reply({ content: "L'utente è stato bannato con successo.", ephemeral: true });
+                    break;
+                }
+
+                case 'unban': {
+                    const user = options.getUser('user', true);
+
+                    const [rows] = await db.execute('SELECT * FROM bans WHERE userId = ?', [user.id]);
+                    if (rows.length === 0) return interaction.reply({ content: 'Questo utente non è bannato.', ephemeral: true });
+
+                    await db.execute('DELETE FROM bans WHERE userId = ?', [user.id]);
+
+                    await logAction('Utente Sbannato dal ModMail', 'Green', [
+                        { name: 'Utente', value: user.toString(), inline: true },
+                        { name: 'Staff', value: interaction.user.toString(), inline: true }
+                    ]);
+                    
+                    await interaction.reply({ content: "Il ban dell'utente è stato rimosso con successo.", ephemeral: true });
+                    break;
+                }
             }
-
-            case 'unban': {
-                const user = options.getUser('user', true);
-
-                const [rows] = await db.execute('SELECT * FROM bans WHERE userId = ?', [user.id]);
-                if (rows.length === 0) return interaction.reply({ content: 'Questo utente non è bannato.', ephemeral: true });
-
-                await db.execute('DELETE FROM bans WHERE userId = ?', [user.id]);
-
-                await logAction('Utente Sbannato dal ModMail', 'Green', [
-                    { name: 'Utente', value: user.toString(), inline: true },
-                    { name: 'Staff', value: interaction.user.toString(), inline: true }
-                ]);
-                
-                await interaction.reply({ content: "Il ban dell'utente è stato rimosso con successo.", ephemeral: true });
-                break;
-            }
+        } catch (error) {
+            console.error("ERRORE NEL COMANDO /modmail:", error);
+            await interaction.reply({ content: 'Si è verificato un errore durante l\'esecuzione del comando.', ephemeral: true });
         }
     }
 });
