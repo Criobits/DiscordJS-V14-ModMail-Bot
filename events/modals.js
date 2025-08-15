@@ -25,14 +25,14 @@ module.exports = new eventshandler.event({
                 const anonymousResponse = interaction.fields.getTextInputValue('reply_anonymous_input').toLowerCase();
                 const isAnonymous = ['sì', 'si', 'yes', 'y'].includes(anonymousResponse);
                 
-                const userEmbed = new EmbedBuilder().setDescription(message).setColor('Blurple').setFooter(footer).setTimestamp();
+                let replyContent;
                 if (isAnonymous) {
-                    userEmbed.setAuthor({ name: `Staff`, iconURL: interaction.guild.iconURL() });
+                    replyContent = `**Lo staff risponde:** ${message}`;
                 } else {
-                    userEmbed.setAuthor({ name: `${interaction.user.displayName}`, iconURL: interaction.user.displayAvatarURL() });
+                    replyContent = `**${interaction.user.displayName} risponde:** ${message}`;
                 }
-
-                await user.send({ embeds: [userEmbed] });
+                
+                await user.send({ content: replyContent });
                 
                 const channelEmbed = new EmbedBuilder()
                     .setDescription(message)
