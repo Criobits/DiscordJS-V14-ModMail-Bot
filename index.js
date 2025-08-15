@@ -18,7 +18,7 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message],
     presence: {
         activities: [{
-            name: "Scrivimi in DM per creare un mail!",
+            name: "Scrivimi in DM per creare un ticket!",
             type: 1,
             url: "https://criobits.com"
         }]
