@@ -26,9 +26,5 @@ module.exports = {
                 channelNameFormat: 'username' // Opzioni: 'username' o 'ticketId'
             },
         ]
-    },
-    options: {
-    inactivityTimeout: 48, // Ore prima dell'avviso di inattività
-    inactivityClose: 72    // Ore prima della chiusura automatica
     }
 };

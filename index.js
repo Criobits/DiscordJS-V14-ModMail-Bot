@@ -5,7 +5,7 @@ require('colors');
 require('dotenv').config();
 const config = require("./config.js");
 const projectVersion = require('./package.json').version;
-const { footer } = require('./functions');
+const { logAction, footer } = require('./functions');
 
 const client = new Client({
     intents: [
@@ -57,7 +57,7 @@ async function initializeDatabase() {
                 closeReason TEXT NULL,
                 createdAt BIGINT NOT NULL,
                 lastMessageAt BIGINT NOT NULL,
-                inactivityWarningSent BOOLEAN DEFAULT FALSE
+                autoCloseAt BIGINT NULL
             );
         `);
         await db.execute(`
@@ -89,39 +89,28 @@ async function initializeDatabase() {
     }
 }
 
-async function checkInactivity() {
+async function checkAutoClose() {
     try {
-        const [openTickets] = await db.execute('SELECT * FROM mails WHERE closed = ?', [false]);
-        if (openTickets.length === 0) return;
+        const [ticketsToClose] = await db.execute('SELECT * FROM mails WHERE closed = ? AND autoCloseAt IS NOT NULL AND autoCloseAt < ?', [false, Date.now()]);
+        if (ticketsToClose.length === 0) return;
 
-        const now = Date.now();
         const guild = client.guilds.cache.get(config.modmail.guildId);
         if (!guild) return;
 
-        for (const ticket of openTickets) {
-            const timeSinceLastMessage = (now - ticket.lastMessageAt) / (1000 * 60 * 60); // in ore
-
+        for (const ticket of ticketsToClose) {
             const channel = guild.channels.cache.get(ticket.channelId);
-            if (!channel) {
-                await db.execute('DELETE FROM mails WHERE id = ?', [ticket.id]);
-                continue;
-            };
-
-            if (!ticket.inactivityWarningSent && timeSinceLastMessage >= config.options.inactivityTimeout) {
-                await channel.send({
-                    embeds: [new EmbedBuilder().setTitle('Avviso di Inattività').setDescription(`Questo ticket non riceve risposte da oltre ${config.options.inactivityTimeout} ore. Verrà chiuso automaticamente tra ${config.options.inactivityClose - config.options.inactivityTimeout} ore se non ci saranno ulteriori messaggi.`).setColor('Yellow').setFooter(footer).setTimestamp()]
-                });
-                await db.execute('UPDATE mails SET inactivityWarningSent = ? WHERE id = ?', [true, ticket.id]);
-            }
-            else if (ticket.inactivityWarningSent && timeSinceLastMessage >= config.options.inactivityClose) {
-                const closeReason = `Chiuso automaticamente dopo ${config.options.inactivityClose} ore di inattività.`;
-                
+            if (channel) {
+                const closeReason = 'Chiuso automaticamente per inattività dopo 24 ore.';
                 await db.execute('UPDATE mails SET closed = ?, closedBy = ?, closeReason = ? WHERE id = ?', [true, client.user.id, closeReason, ticket.id]);
                 await channel.delete(closeReason);
+                await logAction(client, 'Ticket Chiuso Automaticamente', 'Red', [
+                    { name: 'Ticket ID', value: `#${ticket.id}`},
+                    { name: 'Autore', value: `<@${ticket.authorId}>`}
+                ]);
             }
         }
     } catch (error) {
-        console.error("Errore durante il controllo dell'inattività:", error);
+        console.error("Errore durante il controllo dell'autoclose:", error);
     }
 }
 
@@ -132,7 +121,7 @@ client.login(config.client.token).catch((e) => {
 });
 
 client.once('ready', () => {
-    setInterval(checkInactivity, 1000 * 60 * 60);
+    setInterval(checkAutoClose, 1000 * 60 * 5); // Esegui ogni 5 minuti
 });
 
 const commandshandler = new CommandsHandler('./commands/', false);

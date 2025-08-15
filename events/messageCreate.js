@@ -14,6 +14,7 @@ module.exports = new eventshandler.event({
         if (!guild) return console.error("ID Gilda non valido.".red);
 
         try {
+            // Logica per i canali del server
             if (message.guild) {
                 if (message.content.startsWith('!')) {
                     const commandName = message.content.substring(1).split(' ')[0].toLowerCase();
@@ -33,7 +34,7 @@ module.exports = new eventshandler.event({
                             if (user) {
                                 try {
                                     await user.send({ embeds: [embed] });
-                                    await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, ticket.id]);
+                                    await db.execute('UPDATE mails SET lastMessageAt = ?, autoCloseAt = NULL WHERE id = ?', [Date.now(), ticket.id]);
                                     await logAction(client, 'Comando Personalizzato Inviato', 'Gold', [{ name: 'Ticket', value: message.channel.toString() }, { name: 'Staff', value: message.author.toString() }, { name: 'Comando Usato', value: `\`!${commandName}\`` }]);
                                 } catch (error) {
                                     console.error(`Impossibile inviare DM del comando personalizzato a ${ticket.authorId}`, error);
@@ -74,20 +75,16 @@ module.exports = new eventshandler.event({
                             }
                             await user.send({ content: replyContent });
                         }
-
                         if (attachments.size > 0) {
                             await user.send({ content: `Hai ricevuto ${attachments.size} allegato/i:`, files: attachments.map(a => a) });
                         }
-
                         if (content) {
                             const channelEmbed = new EmbedBuilder().setDescription(content).setColor(isAnonReply ? 'Greyple' : 'Green').setAuthor({ name: `Risposta da ${message.author.displayName}${isAnonReply ? ' (Anonima)' : ''}`, iconURL: message.author.displayAvatarURL() }).setFooter(footer).setTimestamp();
                             await message.channel.send({ embeds: [channelEmbed] });
                         }
-                        
                         if (attachments.size > 0) {
                             await message.channel.send({ content: `Allegati inviati da ${message.author.displayName}:`, files: attachments.map(a => a) });
                         }
-
                         let logMessage = content ? content.substring(0, 1024) : '(Nessun testo, solo allegati)';
                         if (content && attachments.size > 0) {
                             logMessage += `\n*(${attachments.size} allegato/i inviato/i)*`;
@@ -95,7 +92,7 @@ module.exports = new eventshandler.event({
                             logMessage = `*(${attachments.size} allegato/i inviato/i)*`;
                         }
                         await logAction(client, 'Risposta Rapida Inviata', isAnonReply ? 'Greyple' : 'Green', [{ name: 'Ticket', value: message.channel.toString() }, { name: 'Staff', value: `${message.author.toString()}${isAnonReply ? ' (Anonimo)' : ''}` }, { name: 'Messaggio', value: logMessage }]);
-                        await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, ticket.id]);
+                        await db.execute('UPDATE mails SET lastMessageAt = ?, autoCloseAt = NULL WHERE id = ?', [Date.now(), ticket.id]);
                         await message.delete();
                     } catch (error) {
                         console.error("Errore invio risposta rapida:", error);
@@ -120,7 +117,7 @@ module.exports = new eventshandler.event({
                                 await channel.send({ content: `Allegato da ${message.author.displayName}:`, files: [attachment] });
                             }
                         }
-                        await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, data[0].id]);
+                        await db.execute('UPDATE mails SET lastMessageAt = ?, autoCloseAt = NULL WHERE id = ?', [Date.now(), data[0].id]);
                         return message.react('📨');
                     }
                 }

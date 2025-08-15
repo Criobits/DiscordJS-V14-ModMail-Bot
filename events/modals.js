@@ -31,7 +31,6 @@ module.exports = new eventshandler.event({
                 } else {
                     replyContent = `**${interaction.user.displayName} risponde:** ${message}`;
                 }
-                
                 await user.send({ content: replyContent });
                 
                 const channelEmbed = new EmbedBuilder()
@@ -42,7 +41,7 @@ module.exports = new eventshandler.event({
                     .setTimestamp();
                 
                 await interaction.channel.send({ embeds: [channelEmbed] });
-                await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, data.id]);
+                await db.execute('UPDATE mails SET lastMessageAt = ?, autoCloseAt = NULL WHERE id = ?', [Date.now(), data.id]);
                 
                 await logAction(client, 'Risposta Inviata', isAnonymous ? 'Greyple' : 'Green', [{ name: 'Ticket', value: interaction.channel.toString() }, { name: 'Staff', value: `${interaction.user.toString()}${isAnonymous ? ' (Anonimo)' : ''}` }, { name: 'Messaggio', value: message.substring(0, 1024) }]);
                 await interaction.editReply({ content: 'Risposta inviata con successo!' });
@@ -67,10 +66,8 @@ module.exports = new eventshandler.event({
                     if (msg.embeds.length > 0 && msg.author.id === client.user.id) {
                         const embed = msg.embeds[0];
                         const timestamp = new Date(msg.createdTimestamp).toLocaleString('it-IT');
-                        
                         const sender = embed.author ? embed.author.name : (embed.title || 'Sistema');
                         const content = embed.description || '(Nessun testo)';
-
                         transcriptMessages.push(`[${timestamp}] ${sender}: ${content}`);
                     } else if (msg.attachments.size > 0) {
                         msg.attachments.forEach(att => transcriptMessages.push(`[${new Date(msg.createdTimestamp).toLocaleString('it-IT')}] ${msg.author.tag}: [ALLEGATO: ${att.url}]`));
