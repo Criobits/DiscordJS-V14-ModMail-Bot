@@ -18,7 +18,7 @@ const client = new Client({
     partials: [Partials.Channel, Partials.Message],
     presence: {
         activities: [{
-            name: "Scrivimi in DM per creare un ticket!",
+            name: "Scrivimi in DM per creare un mail!",
             type: 1,
             url: "https://criobits.com"
         }]
@@ -27,6 +27,12 @@ const client = new Client({
 });
 
 const webhookClient = (config.logs.webhookURL) ? new WebhookClient({ url: config.logs.webhookURL }) : null;
+
+if (webhookClient) {
+    console.log('Webhook client inizializzato con successo. I log sono ATTIVI.'.cyan);
+} else {
+    console.log('URL del webhook non trovato in config.js. I log saranno DISABILITATI.'.yellow);
+}
 
 const db = mysql.createPool({
     host: config.database.host,
@@ -105,7 +111,7 @@ async function checkInactivity() {
 
             const channel = guild.channels.cache.get(ticket.channelId);
             if (!channel) {
-                await db.execute('DELETE FROM mails WHERE id = ?', [ticket.id]); // Pulisce ticket orfani
+                await db.execute('DELETE FROM mails WHERE id = ?', [ticket.id]);
                 continue;
             };
 

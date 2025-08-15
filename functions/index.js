@@ -40,7 +40,10 @@ const footer = {
  * @param {Array<{name: string, value: string, inline?: boolean}>} fields - I campi da aggiungere all'embed.
  */
 async function logAction(title, color, fields = []) {
-    if (!webhookClient) return;
+    if (!webhookClient) {
+        console.log(`Tentativo di inviare il log "${title}", ma il webhook non è configurato in config.js.`.yellow);
+        return;
+    }
 
     const embed = new EmbedBuilder()
         .setTitle(title)
