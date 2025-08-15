@@ -104,10 +104,18 @@ module.exports = new eventshandler.event({
                     const transcriptChannel = await client.channels.cache.get(transcriptChannelId);
                     if (transcriptChannel && transcriptChannel.type === ChannelType.GuildText) {
                         const transcriptEmbed = new EmbedBuilder()
-                            .setAuthor({ name: `Transcript per ${author.tag}` })
-                            .addFields({ name: 'Autore Ticket', value: `${author.toString()} (\`${data.authorId}\`)`, inline: true }, { name: 'Chiuso da', value: `${interaction.user.toString()} (\`${interaction.user.id}\`)`, inline: true }, { name: 'Motivo', value: reason })
+                            .setAuthor({ name: `Transcript per ${author.tag} - Ticket #${data.id}` })
+                            .addFields(
+                                { name: 'Autore Ticket', value: `${author.toString()} (\`${data.authorId}\`)`, inline: true },
+                                { name: 'Chiuso da', value: `${interaction.user.toString()} (\`${interaction.user.id}\`)`, inline: true },
+                                { name: 'Motivo', value: reason }
+                            )
                             .setColor('Orange');
-                        await transcriptChannel.send({ embeds: [transcriptEmbed], files: [new AttachmentBuilder(Buffer.from(transcript), { name: `cronologia-${channel.name}.txt` })] });
+                        
+                        await transcriptChannel.send({ 
+                            embeds: [transcriptEmbed],
+                            files: [new AttachmentBuilder(Buffer.from(transcript), { name: `cronologia-${channel.name}.txt` })]
+                        });
                     } else {
                         console.error("L'ID del canale transcript non è valido o non è un canale testuale.".red);
                     }
