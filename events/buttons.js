@@ -1,6 +1,5 @@
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
 const { eventshandler, db } = require("..");
-const { logAction } = require("../functions");
 
 module.exports = new eventshandler.event({
     event: 'interactionCreate',
@@ -37,32 +36,6 @@ module.exports = new eventshandler.event({
                 );
 
                 await interaction.showModal(modal);
-                break;
-            }
-
-            case customId === 'assign_ticket': {
-                await interaction.deferUpdate();
-                const [rows] = await db.execute('SELECT * FROM mails WHERE channelId = ?', [interaction.channelId]);
-                const data = rows[0];
-
-                if (!data || data.assignedTo) {
-                    return interaction.followUp({ content: 'Questo ticket è già stato preso in carico o non è più valido.', ephemeral: true });
-                }
-
-                await db.execute('UPDATE mails SET assignedTo = ? WHERE channelId = ?', [interaction.user.id, interaction.channelId]);
-
-                const originalMessage = await interaction.channel.messages.fetch(interaction.message.id);
-                const newEmbed = EmbedBuilder.from(originalMessage.embeds[0])
-                    .addFields({ name: 'Assegnato a', value: interaction.user.toString() });
-
-                await originalMessage.edit({ embeds: [newEmbed] });
-
-                await logAction('Ticket Assegnato', 'Blue', [
-                    { name: 'Ticket', value: interaction.channel.toString() },
-                    { name: 'Assegnato a', value: interaction.user.toString(), inline: true },
-                    { name: 'Autore Ticket', value: `<@${data.authorId}>`, inline: true }
-                ]);
-
                 break;
             }
             

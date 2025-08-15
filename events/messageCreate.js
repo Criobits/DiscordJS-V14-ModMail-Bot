@@ -11,6 +11,7 @@ module.exports = new eventshandler.event({
         if (message.author.bot || message.guild) return;
 
         const guild = client.guilds.cache.get(config.modmail.guildId);
+        if (!guild) return;
         
         if (message.guild) {
             const allowedCategoryIds = config.modmail.categories.map(c => c.categoryId);
@@ -102,12 +103,11 @@ module.exports = new eventshandler.event({
                 await i.update({ content: `Il tuo ticket in **${selectedCategory.name}** è stato creato!`, components: [] });
 
                 const embed = new EmbedBuilder()
-                    .setTitle(`Nuovo mail - ${selectedCategory.name}`)
-                    .addFields(
-                        { name: `Autore`, value: `${message.author.displayName} (\`${message.author.id}\`)` },
-                        { name: `Messaggio`, value: `${message.content?.length > 0 ? message.content : '(Nessuno)'}` }
-                    )
-                    .setColor('Blurple');
+                    .setAuthor({ name: message.author.displayName, iconURL: message.author.displayAvatarURL() })
+                    .setDescription(message.content?.length > 0 ? message.content : '(Nessun testo)')
+                    .setColor('Blurple')
+                    .setTitle(`Nuovo Ticket - ${selectedCategory.name}`)
+                    .addFields({ name: 'Utente', value: `${message.author.tag} (\`${message.author.id}\`)` });
                 
                 if (message.attachments?.size > 0) {
                     const imageAttachment = message.attachments.find(a => a.contentType?.startsWith('image/'));
@@ -118,21 +118,8 @@ module.exports = new eventshandler.event({
 
                 const ticketActionRow = new ActionRowBuilder()
                     .addComponents(
-                        new ButtonBuilder()
-                            .setCustomId('reply_ticket')
-                            .setLabel('Rispondi')
-                            .setStyle(ButtonStyle.Success)
-                            .setEmoji('✉️'),
-                        new ButtonBuilder()
-                            .setCustomId('assign_ticket')
-                            .setLabel('Prendi in Carico')
-                            .setStyle(ButtonStyle.Primary)
-                            .setEmoji('🙋‍♂️'),
-                        new ButtonBuilder()
-                            .setCustomId('close_ticket')
-                            .setLabel('Chiudi Ticket')
-                            .setStyle(ButtonStyle.Danger)
-                            .setEmoji('🔒')
+                        new ButtonBuilder().setCustomId('reply_ticket').setLabel('Rispondi').setStyle(ButtonStyle.Success).setEmoji('✉️'),
+                        new ButtonBuilder().setCustomId('close_ticket').setLabel('Chiudi Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒')
                     );
 
                 await newChannel.send({
@@ -140,7 +127,7 @@ module.exports = new eventshandler.event({
                     embeds: [embed],
                     components: [ticketActionRow]
                 }).then(sentPin => sentPin.pin());
-                
+
                 await logAction('Nuovo Ticket Creato', 'Green', [
                     { name: 'Autore', value: message.author.toString(), inline: true },
                     { name: 'Categoria', value: selectedCategory.name, inline: true },

@@ -6,11 +6,12 @@ module.exports = {
     database: {
         host: process.env.DB_HOST || 'localhost',
         user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'modmail'
+        database: process.env.DB_NAME || 'modmail',
+        password: process.env.DB_PASSWORD || ''
     },
     modmail: {
         guildId: '', // L'ID del tuo server
+        transcriptChannelId: '1365783421292646401',
         categories: [
             {
                 name: 'Supporto Generale',

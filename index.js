@@ -54,7 +54,6 @@ async function initializeDatabase() {
                 guildId VARCHAR(255) NOT NULL,
                 channelId VARCHAR(255) NOT NULL,
                 closed BOOLEAN DEFAULT FALSE,
-                assignedTo VARCHAR(255) NULL,
                 closedBy VARCHAR(255) NULL,
                 closeReason TEXT NULL
             );
