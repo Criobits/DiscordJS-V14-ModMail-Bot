@@ -20,7 +20,8 @@ module.exports = {
                 staffRoles: ['ROLE_ID_1'], // ID dei Ruoli che possono vedere il ticket
                 mentionStaffRolesOnNewMail: true,
                 emoji: '🛠️',
-                description: 'Apri un ticket per domande generiche.'
+                description: 'Apri un ticket per domande generiche.',
+                channelNameFormat: 'username' // Opzioni: 'username' o 'ticketId'
             },
         ]
     },
