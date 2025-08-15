@@ -1,5 +1,5 @@
 const { EmbedBuilder, StringSelectMenuBuilder, ActionRowBuilder, roleMention, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { eventshandler, db, webhookClient } = require("..");
+const { eventshandler, db } = require("..");
 const config = require("../config");
 const { logAction, footer } = require("../functions");
 
@@ -14,10 +14,36 @@ module.exports = new eventshandler.event({
         if (!guild) return console.error("ID Gilda non valido.".red);
 
         try {
-            // Logica per i canali dei ticket (COMANDI RAPIDI)
+            // Logica per i messaggi inviati in un server (canali)
             if (message.guild) {
+                // Controlla se è un comando personalizzato
+                if (message.content.startsWith('!')) {
+                    const commandName = message.content.substring(1).split(' ')[0].toLowerCase();
+                    
+                    const [customCmdData] = await db.execute('SELECT * FROM custom_commands WHERE commandName = ? AND guildId = ?', [commandName, message.guild.id]);
+
+                    if (customCmdData.length > 0) {
+                        const cmd = customCmdData[0];
+                        const embed = new EmbedBuilder()
+                            .setTitle(cmd.embedTitle)
+                            .setDescription(cmd.embedDescription)
+                            .setColor('Gold')
+                            .setFooter(footer)
+                            .setTimestamp();
+                        
+                        if (cmd.embedThumbnail && (cmd.embedThumbnail.startsWith('http://') || cmd.embedThumbnail.startsWith('https://'))) {
+                            embed.setThumbnail(cmd.embedThumbnail);
+                        }
+                        
+                        await message.channel.send({ embeds: [embed] });
+                        await message.delete().catch(() => {});
+                        return; // Ferma l'esecuzione se è un comando personalizzato
+                    }
+                }
+
+                // Logica per i canali dei ticket (COMANDI RAPIDI)
                 const [ticketData] = await db.execute('SELECT * FROM mails WHERE channelId = ? AND closed = ?', [message.channel.id, false]);
-                if (ticketData.length === 0) return; // Non è un canale di ticket attivo
+                if (ticketData.length === 0) return;
 
                 const isReply = message.content.startsWith('!r');
                 const isAnonReply = message.content.startsWith('!ar');
@@ -34,9 +60,7 @@ module.exports = new eventshandler.event({
 
                     const ticket = ticketData[0];
                     const user = await client.users.fetch(ticket.authorId).catch(() => null);
-                    if (!user) {
-                        return message.reply({ content: "Impossibile trovare l'utente del ticket." });
-                    }
+                    if (!user) return message.reply({ content: "Impossibile trovare l'utente del ticket." });
                     
                     try {
                         if (content) {
@@ -91,7 +115,6 @@ module.exports = new eventshandler.event({
 
                         await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, ticket.id]);
                         await message.delete();
-
                     } catch (error) {
                         console.error("Errore invio risposta rapida:", error);
                         message.reply('Impossibile inviare il messaggio. L\'utente potrebbe avere i DM chiusi.');

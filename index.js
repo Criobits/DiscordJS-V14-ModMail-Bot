@@ -72,6 +72,19 @@ async function initializeDatabase() {
                 FOREIGN KEY (ticketId) REFERENCES mails(id) ON DELETE CASCADE
             );
         `);
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS custom_commands (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                guildId VARCHAR(255) NOT NULL,
+                commandName VARCHAR(255) NOT NULL,
+                embedTitle TEXT,
+                embedDescription TEXT,
+                embedThumbnail VARCHAR(255) NULL,
+                createdBy VARCHAR(255) NOT NULL,
+                createdAt BIGINT NOT NULL,
+                UNIQUE (guildId, commandName)
+            );
+        `);
         console.log('Database tables checked/created successfully.'.green);
     } catch (error) {
         console.error('Error initializing database:'.red, error);
