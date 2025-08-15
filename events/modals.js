@@ -66,7 +66,11 @@ module.exports = new eventshandler.event({
                 messages.reverse().forEach(msg => {
                     if (msg.embeds.length > 0 && msg.author.id === client.user.id) {
                         const embed = msg.embeds[0];
-                        transcriptMessages.push(`[${new Date(msg.createdTimestamp).toLocaleString('it-IT')}] ${embed.author.name}: ${embed.description || '(Nessun testo)'}`);
+                        const timestamp = new Date(msg.createdTimestamp).toLocaleString('it-IT');
+                        const sender = embed.author ? embed.author.name : (embed.title || 'Sistema');
+                        const content = embed.description || '(Nessun testo)';
+
+                        transcriptMessages.push(`[${timestamp}] ${sender}: ${content}`);
                     } else if (msg.attachments.size > 0) {
                         msg.attachments.forEach(att => transcriptMessages.push(`[${new Date(msg.createdTimestamp).toLocaleString('it-IT')}] ${msg.author.tag}: [ALLEGATO: ${att.url}]`));
                     }
