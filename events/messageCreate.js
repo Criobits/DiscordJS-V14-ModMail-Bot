@@ -14,18 +14,20 @@ module.exports = new eventshandler.event({
         if (!guild) return console.error("ID Gilda non valido.".red);
 
         try {
-            // Logica per i canali dei ticket (NUOVI COMANDI RAPIDI)
+            // Logica per i canali dei ticket (COMANDI RAPIDI)
             if (message.guild) {
                 const [ticketData] = await db.execute('SELECT * FROM mails WHERE channelId = ? AND closed = ?', [message.channel.id, false]);
                 if (ticketData.length === 0) return; // Non è un canale di ticket attivo
 
-                const isReply = message.content.startsWith('!r ');
-                const isAnonReply = message.content.startsWith('!ar ');
+                const isReply = message.content.startsWith('!r');
+                const isAnonReply = message.content.startsWith('!ar');
 
                 if (isReply || isAnonReply) {
-                    const content = message.content.substring(isReply ? 3 : 4).trim();
-                    if (!content) {
-                        const tempMsg = await message.reply({ content: 'Devi specificare un messaggio da inviare.' });
+                    const content = message.content.substring(isReply ? 2 : 3).trim();
+                    const attachments = message.attachments;
+
+                    if (!content && attachments.size === 0) {
+                        const tempMsg = await message.reply({ content: 'Devi specificare un messaggio o allegare un file.' });
                         setTimeout(() => tempMsg.delete().catch(() => {}), 5000);
                         return;
                     }
@@ -36,32 +38,62 @@ module.exports = new eventshandler.event({
                         return message.reply({ content: "Impossibile trovare l'utente del ticket." });
                     }
                     
-                    const userEmbed = new EmbedBuilder()
-                        .setDescription(content)
-                        .setColor('Blurple')
-                        .setFooter(footer)
-                        .setTimestamp();
-                    
-                    if (isAnonReply) {
-                        userEmbed.setAuthor({ name: 'Staff', iconURL: guild.iconURL() });
-                    } else {
-                        userEmbed.setAuthor({ name: message.author.displayName, iconURL: message.author.displayAvatarURL() });
-                    }
-                    
                     try {
-                        await user.send({ embeds: [userEmbed] });
+                        if (content) {
+                            const userEmbed = new EmbedBuilder()
+                                .setDescription(content)
+                                .setColor('Blurple')
+                                .setFooter(footer)
+                                .setTimestamp();
+                            
+                            if (isAnonReply) {
+                                userEmbed.setAuthor({ name: 'Staff', iconURL: guild.iconURL() });
+                            } else {
+                                userEmbed.setAuthor({ name: message.author.displayName, iconURL: message.author.displayAvatarURL() });
+                            }
+                            await user.send({ embeds: [userEmbed] });
+                        }
 
-                        const channelEmbed = new EmbedBuilder()
-                            .setDescription(content)
-                            .setColor(isAnonReply ? 'Greyple' : 'Green')
-                            .setAuthor({ name: `Risposta da ${message.author.displayName}${isAnonReply ? ' (Anonima)' : ''}`, iconURL: message.author.displayAvatarURL() })
-                            .setFooter(footer)
-                            .setTimestamp();
+                        if (attachments.size > 0) {
+                            await user.send({
+                                content: `Hai ricevuto ${attachments.size} allegato/i:`,
+                                files: attachments.map(a => a)
+                            });
+                        }
 
-                        await message.channel.send({ embeds: [channelEmbed] });
+                        if (content) {
+                            const channelEmbed = new EmbedBuilder()
+                                .setDescription(content)
+                                .setColor(isAnonReply ? 'Greyple' : 'Green')
+                                .setAuthor({ name: `Risposta da ${message.author.displayName}${isAnonReply ? ' (Anonima)' : ''}`, iconURL: message.author.displayAvatarURL() })
+                                .setFooter(footer)
+                                .setTimestamp();
+                            await message.channel.send({ embeds: [channelEmbed] });
+                        }
+                        
+                        if (attachments.size > 0) {
+                            await message.channel.send({
+                                content: `Allegati inviati da ${message.author.displayName}:`,
+                                files: attachments.map(a => a)
+                            });
+                        }
+
+                        let logMessage = content ? content.substring(0, 1024) : '';
+                        if (attachments.size > 0) {
+                            logMessage += `\n*(${attachments.size} allegato/i inviato/i)*`;
+                        }
+
+                        await logAction('Risposta Rapida Inviata', isAnonReply ? 'Greyple' : 'Green', [
+                            { name: 'Ticket', value: message.channel.toString() },
+                            { name: 'Staff', value: `${message.author.toString()}${isAnonReply ? ' (Anonimo)' : ''}` },
+                            { name: 'Messaggio', value: logMessage }
+                        ]);
+
                         await db.execute('UPDATE mails SET lastMessageAt = ?, inactivityWarningSent = ? WHERE id = ?', [Date.now(), false, ticket.id]);
                         await message.delete();
+
                     } catch (error) {
+                        console.error("Errore invio risposta rapida:", error);
                         message.reply('Impossibile inviare il messaggio. L\'utente potrebbe avere i DM chiusi.');
                     }
                 }
